@@ -8,4 +8,3 @@ export default function PredesinfectionPage({
   const { cycleId } = params;
   return <PredesinfectionWizard cycleId={cycleId} />;
 }
-
