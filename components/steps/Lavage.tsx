@@ -303,13 +303,13 @@ function OperatorCard({ name, role, badgeId }: any) {
   return (
     <div className="animate-in fade-in zoom-in duration-500 w-full">
       <div className="p-10 bg-slate-900 rounded-[3rem] text-white space-y-8 shadow-2xl relative overflow-hidden group">
-        <div className="absolute -top-10 -right-10 p-4 opacity-5 text-[10rem] rotate-12">🧪</div>
+        <div className="absolute -top-10 -right-10 p-4 opacity-10 text-[10rem] rotate-12">🧪</div>
         <div className="flex flex-col items-center text-center gap-6 relative z-10">
-          <div className="h-32 w-32 bg-blue-500 rounded-full flex items-center justify-center text-6xl border-8 border-slate-800 shadow-inner group-hover:scale-110 transition-transform">👨‍🔬</div>
+          <div className="h-32 w-32 bg-blue-500 rounded-full flex items-center justify-center text-6xl border-8 border-slate-800 shadow-inner group-hover:scale-110 transition-transform">👩‍🔬</div>
           <div className="space-y-2">
             <p className="text-3xl font-black italic tracking-tighter uppercase">{name}</p>
-            <div className="h-1.5 w-16 bg-blue-500 mx-auto rounded-full"></div>
-            <p className="text-blue-400 font-black uppercase text-xs tracking-[0.3em] mt-4">{role}</p>
+            <div className="h-1 w-12 bg-blue-500 mx-auto rounded-full"></div>
+            <p className="text-blue-400 font-bold uppercase text-[10px] tracking-[0.2em] mt-2">{role}</p>
           </div>
         </div>
         <div className="pt-6 border-t border-slate-800 text-center">

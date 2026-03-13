@@ -6,13 +6,12 @@ import { PredesinfectionWizard } from "@/components/PredesinfectionWizard";
 import { LavageWizard } from "@/components/steps/Lavage";
 import { Recomposition } from "@/components/steps/Recomposition";
 import { SterilizationWizard } from "@/components/steps/Sterilization";
-import { Storage } from "@/components/steps/storage";
-import { Distribution } from "@/components/steps/distribution";
+import { StorageDistribution } from "@/components/steps/StorageDistribution";
 
 export default function Home() {
   // État unifié pour les modules du cycle de vie complet
   const [activeModule, setActiveModule] = useState<
-    "pre" | "lavage" | "recomp" | "steri" | "storage" | "distri" | null
+    "pre" | "lavage" | "recomp" | "steri" | "storage-distri" | null
   >(null);
 
   // Bouton de retour universel
@@ -38,11 +37,8 @@ export default function Home() {
   if (activeModule === "steri") {
     return <div className="relative">{renderBackButton()}<SterilizationWizard /></div>;
   }
-  if (activeModule === "storage") {
-    return <div className="relative">{renderBackButton()}<Storage /></div>;
-  }
-  if (activeModule === "distri") {
-    return <div className="relative">{renderBackButton()}<Distribution /></div>;
+  if (activeModule === "storage-distri") {
+    return <div className="relative">{renderBackButton()}<StorageDistribution /></div>;
   }
 
   // --- Interface Dashboard Principal ---
@@ -96,20 +92,11 @@ export default function Home() {
 
         <DashboardCard 
           icon="🏢" 
-          title="Stockage" 
-          desc="Gestion Arsenal & Rayonnage" 
-          color="hover:border-blue-600" 
-          textColor="text-blue-700" 
-          onClick={() => setActiveModule("storage")} 
-        />
-
-        <DashboardCard 
-          icon="🚚" 
-          title="Distribution" 
-          desc="Affectation aux Blocs" 
-          color="hover:border-indigo-500" 
-          textColor="text-indigo-600" 
-          onClick={() => setActiveModule("distri")} 
+          title="Stockage & Distribution" 
+          desc="Gestion Arsenal & Affectation Blocs" 
+          color="hover:border-indigo-600" 
+          textColor="text-indigo-700" 
+          onClick={() => setActiveModule("storage-distri")} 
         />
         
       </div>
