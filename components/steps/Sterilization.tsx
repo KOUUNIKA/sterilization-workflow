@@ -37,8 +37,18 @@ type CheckItemProps = {
   onClick: () => void;
 };
 
-export function SterilizationWizard() {
-  const [phase, setPhase] = useState<1 | 2>(1); // 1: Chargement, 2: Déchargement
+interface SterilizationWizardProps {
+  initialPhase?: 1 | 2;
+  onPhaseChange?: (phase: 1 | 2) => void;
+}
+
+export function SterilizationWizard({ initialPhase = 1, onPhaseChange }: SterilizationWizardProps) {
+  const [phase, setPhase] = useState<1 | 2>(initialPhase); // 1: Chargement, 2: Déchargement
+
+  const handlePhaseChange = (newPhase: 1 | 2) => {
+    setPhase(newPhase);
+    onPhaseChange?.(newPhase);
+  };
 
   // --- Phase 1: Chargement States ---
   const [autoclaveStatus, setAutoclaveStatus] = useState<"ready" | "maintenance" | null>(null);
@@ -135,13 +145,13 @@ export function SterilizationWizard() {
 
               <div className="flex rounded-xl border border-[#d5e2ea] bg-white/95 p-1.5 shadow-sm">
                 <button 
-                  onClick={() => setPhase(1)}
+                  onClick={() => handlePhaseChange(1)}
                   className={`px-6 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-[0.2em] transition-all ${phase === 1 ? 'bg-[#1378ac] text-white shadow-lg' : 'text-slate-400 hover:text-[#0b4867]'}`}
                 >
                   01. Chargement
                 </button>
                 <button 
-                  onClick={() => setPhase(2)}
+                  onClick={() => handlePhaseChange(2)}
                   className={`px-6 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-[0.2em] transition-all ${phase === 2 ? 'bg-[#11b5a2] text-white shadow-lg' : 'text-slate-400 hover:text-[#0b4867]'}`}
                 >
                   02. Validation
@@ -235,7 +245,7 @@ export function SterilizationWizard() {
         <div className="flex justify-center pb-10 pt-2">
           {phase === 1 ? (
             <button 
-              onClick={() => { alert('Cycle Stérilisation Lancé !'); setPhase(2); }}
+              onClick={() => { alert('Cycle Stérilisation Lancé !'); handlePhaseChange(2); }}
               disabled={!isPhase1Complete}
               className={`group relative rounded-2xl px-20 py-5 text-sm font-semibold uppercase tracking-[0.22em] transition-all duration-500 shadow-[0_20px_40px_rgba(11,72,103,0.14)] ${isPhase1Complete ? 'bg-[#1378ac] text-white hover:bg-[#0f6a98] hover:-translate-y-1.5 active:scale-95' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
             >

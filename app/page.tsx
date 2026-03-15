@@ -7,60 +7,166 @@ import { LavageWizard } from "@/components/steps/Lavage";
 import { Recomposition } from "@/components/steps/Recomposition";
 import { SterilizationWizard } from "@/components/steps/Sterilization";
 import { StorageDistribution } from "@/components/steps/StorageDistribution";
+import { PatientLiaison } from "@/components/PatientLiaison";
+import { Chatbot } from "@/components/Chatbot";
+
+import { Sidebar, type WorkflowZone } from "@/components/Sidebar";
 
 export default function Home() {
   const [activeModule, setActiveModule] = useState<
-    "pre" | "lavage" | "recomp" | "steri" | "storage-distri" | null
+    "pre" | "lavage-chargement" | "lavage-sortie" | "recomp" | "steri-chargement" | "steri-sortie" | "storage-distri" | "liaison" | "maintenance" | "edition" | null
   >(null);
 
-  const renderBackButton = () => (
-    <button
-      onClick={() => setActiveModule(null)}
-      className="fixed left-4 top-4 z-[60] rounded-xl border border-[#b8cad6] bg-white/95 px-4 py-2 text-xs font-semibold text-[#0b4867] shadow-[0_16px_32px_rgba(11,72,103,0.12)] backdrop-blur transition-all hover:border-[#1378ac] hover:bg-white active:scale-95"
-    >
-      ← Retour au tableau de bord
-    </button>
-  );
+  // Map module to zone
+  const moduleToZone = (mod: typeof activeModule): WorkflowZone => {
+    switch (mod) {
+      case "pre": return "zone-sale";
+      case "lavage-chargement": return "zone-sale";
+      case "lavage-sortie": return "zone-propre";
+      case "recomp": return "zone-propre";
+      case "steri-chargement": return "zone-propre";
+      case "steri-sortie": return "zone-sterile";
+      case "storage-distri": return "zone-sterile";
+      case "liaison": return "liaison";
+      case "maintenance": return "maintenance";
+      case "edition": return "edition";
+      default: return "dashboard";
+    }
+  };
+
+  const handleZoneChange = (zone: WorkflowZone) => {
+    switch (zone) {
+      case "zone-sale": setActiveModule("pre"); break;
+      case "zone-propre": setActiveModule("recomp"); break;
+      case "zone-sterile": setActiveModule("storage-distri"); break;
+      case "liaison": setActiveModule("liaison"); break;
+      case "maintenance": setActiveModule("maintenance"); break;
+      case "edition": setActiveModule("edition"); break;
+      case "dashboard": setActiveModule(null); break;
+      default: break;
+    }
+  };
+
+  const getZoneLabel = (zone: WorkflowZone) => {
+    switch (zone) {
+      case "zone-sale": return "Zone sale";
+      case "zone-propre": return "Zone propre";
+      case "zone-sterile": return "Zone stérile";
+      case "liaison": return "Liaison Patient";
+      case "maintenance": return "Gestion de maintenance";
+      case "edition": return "Edition";
+      default: return "Tableau de bord";
+    }
+  };
+
+  const renderLayout = (content: React.ReactNode) => {
+    const currentZone = moduleToZone(activeModule);
+    return (
+      <div className="flex h-screen overflow-hidden bg-white font-app">
+        <Sidebar 
+          currentZone={currentZone} 
+          onZoneChange={handleZoneChange}
+        />
+        <div className="flex-1 flex flex-col min-w-0 relative">
+          {/* Header - Removed CLINISYS logo */}
+          <header className="h-[70px] bg-[#0b4867] flex items-center justify-between px-6 text-white shrink-0 shadow-lg z-20">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2.5">
+                <div className="bg-white/10 p-2 rounded-xl border border-white/20">
+                  <span className="text-xl">🛡️</span>
+                </div>
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#8de7da]">Sterilization Suite</p>
+                  <p className="text-[10px] font-medium text-white/60">Gestion Opérationnelle</p>
+                </div>
+              </div>
+              <div className="h-8 w-px bg-white/10 mx-2" />
+              <div className="flex flex-col">
+                <span className="text-xs font-bold uppercase tracking-[0.15em] text-[#8de7da]">Hospital Central</span>
+                <span className="text-[10px] font-medium text-white/60">Pôle Chirurgical • Bloc & Stéri</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+               <div className="flex bg-white/10 p-1.5 rounded-2xl gap-2">
+                  <button 
+                    onClick={() => setActiveModule(null)}
+                    className="h-10 w-10 flex items-center justify-center rounded-xl bg-white/20 hover:bg-white text-white hover:text-[#0b4867] transition-all"
+                  >🏠</button>
+                  <button className="h-10 w-10 flex items-center justify-center rounded-xl hover:bg-white/20 transition-all text-xl">📄</button>
+               </div>
+               <div className="flex items-center gap-3 pl-4 border-l border-white/10">
+                  <div className="text-right hidden sm:block">
+                     <p className="text-[10px] font-bold text-white uppercase tracking-wider">Amina Benali</p>
+                     <p className="text-[9px] text-[#8de7da] font-medium uppercase tracking-[0.1em]">Agent Qualité</p>
+                  </div>
+                  <div className="h-10 w-10 rounded-full bg-[#1378ac] flex items-center justify-center text-sm font-bold border-2 border-white/20 shadow-inner">AB</div>
+               </div>
+            </div>
+          </header>
+
+          {/* Content Area */}
+          <main className="flex-1 overflow-y-auto bg-[#f4f8fb] relative scroll-smooth">
+            {/* Dashboard Header Bar matching screenshot */}
+            <div className="sticky top-0 z-10 bg-[#f4f8fb]/80 backdrop-blur-md px-8 py-4 border-b border-[#d5e2ea] flex items-center justify-between">
+               <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center shadow-sm border border-[#d5e2ea] text-xl">📦</div>
+                  <div>
+                     <h2 className="text-lg font-bold text-[#0b4867] tracking-tight">{getZoneLabel(currentZone).toUpperCase()}</h2>
+                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Poste opérationnel</p>
+                  </div>
+               </div>
+               
+               <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-[#fff6e9] rounded-2xl border border-[#ffe4bc]">
+                     <span className="text-[#f59e0b] font-bold text-lg leading-none">12</span>
+                     <span className="text-[11px] font-bold text-[#b45309] uppercase tracking-wide">boite(s) transférée(s)</span>
+                  </div>
+                  <button className="px-5 py-2.5 bg-white border border-[#d5e2ea] rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:border-[#1378ac] hover:text-[#1378ac] transition-all shadow-sm">
+                    Fiche procédurale
+                  </button>
+               </div>
+            </div>
+
+            <div className="p-8">
+              {content}
+            </div>
+          </main>
+          
+          <Chatbot currentZone={currentZone} />
+        </div>
+      </div>
+    );
+  };
 
   if (activeModule === "pre") {
-    return (
-      <div className="relative">
-        {renderBackButton()}
-        <PredesinfectionWizard cycleId="2026-0001" />
-      </div>
-    );
+    return renderLayout(<PredesinfectionWizard cycleId="2026-0001" />);
   }
-  if (activeModule === "lavage") {
-    return (
-      <div className="relative">
-        {renderBackButton()}
-        <LavageWizard />
-      </div>
-    );
+  if (activeModule === "lavage-chargement") {
+    return renderLayout(<LavageWizard initialPhase={1} onPhaseChange={(p) => setActiveModule(p === 1 ? "lavage-chargement" : "lavage-sortie")} />);
+  }
+  if (activeModule === "lavage-sortie") {
+    return renderLayout(<LavageWizard initialPhase={2} onPhaseChange={(p) => setActiveModule(p === 1 ? "lavage-chargement" : "lavage-sortie")} />);
   }
   if (activeModule === "recomp") {
-    return (
-      <div className="relative">
-        {renderBackButton()}
-        <Recomposition />
-      </div>
-    );
+    return renderLayout(<Recomposition />);
   }
-  if (activeModule === "steri") {
-    return (
-      <div className="relative">
-        {renderBackButton()}
-        <SterilizationWizard />
-      </div>
-    );
+  if (activeModule === "steri-chargement") {
+    return renderLayout(<SterilizationWizard initialPhase={1} onPhaseChange={(p) => setActiveModule(p === 1 ? "steri-chargement" : "steri-sortie")} />);
+  }
+  if (activeModule === "steri-sortie") {
+    return renderLayout(<SterilizationWizard initialPhase={2} onPhaseChange={(p) => setActiveModule(p === 1 ? "steri-chargement" : "steri-sortie")} />); 
   }
   if (activeModule === "storage-distri") {
-    return (
-      <div className="relative">
-        {renderBackButton()}
-        <StorageDistribution />
-      </div>
-    );
+    return renderLayout(<StorageDistribution />);
+  }
+  if (activeModule === "liaison") {
+    return renderLayout(<PatientLiaison />);
+  }
+  if (activeModule === "maintenance") {
+    return renderLayout(<div className="bg-white p-10 rounded-3xl border border-[#d5e2ea] shadow-sm"><h2 className="text-2xl font-bold text-[#0b4867]">Gestion de Maintenance</h2><p className="mt-4 text-slate-500">Interface de maintenance en attente de configuration.</p></div>);
+  }
+  if (activeModule === "edition") {
+    return renderLayout(<div className="bg-white p-10 rounded-3xl border border-[#d5e2ea] shadow-sm"><h2 className="text-2xl font-bold text-[#0b4867]">Edition</h2><p className="mt-4 text-slate-500">Interface d'édition en attente de configuration.</p></div>);
   }
 
   return (
@@ -131,11 +237,11 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid w-full grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid w-full grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
             <DashboardCard
               step="01"
               title="Prédésinfection"
-              desc="Trempage, identification du contenant et validation agent."
+              desc="Trempage, identification du contenant et validation agent (Zone Sale - Bloc)."
               accent="border-[#11b5a2]/35 bg-[#eafaf7] text-[#0b786e]"
               onClick={() => setActiveModule("pre")}
             />
@@ -143,15 +249,15 @@ export default function Home() {
             <DashboardCard
               step="02"
               title="Lavage"
-              desc="Entrée machine, conformité de cycle et libération de charge."
+              desc="Entrée machine, conformité de cycle et libération (Zone Sale/Propre - Service)."
               accent="border-[#1378ac]/25 bg-[#e8f4fb] text-[#1378ac]"
-              onClick={() => setActiveModule("lavage")}
+              onClick={() => setActiveModule("lavage-chargement")}
             />
 
             <DashboardCard
               step="03"
               title="Recomposition"
-              desc="Contrôle des instruments, état, emballage et étiquette."
+              desc="Contrôle instruments, emballage et étiquette (Zone Propre - Service)."
               accent="border-[#0b4867]/20 bg-[#edf5f9] text-[#0b4867]"
               onClick={() => setActiveModule("recomp")}
             />
@@ -159,17 +265,25 @@ export default function Home() {
             <DashboardCard
               step="04"
               title="Stérilisation"
-              desc="Chargement autoclave, indicateurs critiques et validation."
+              desc="Chargement autoclave et validation sortie (Zone Propre/Stérile)."
               accent="border-[#11b5a2]/30 bg-[#f2fbfa] text-[#11b5a2]"
-              onClick={() => setActiveModule("steri")}
+              onClick={() => setActiveModule("steri-chargement")}
             />
 
             <DashboardCard
               step="05"
               title="Stockage & Distribution"
-              desc="Arsenal, affectation bloc et continuité de traçabilité."
+              desc="Arsenal, affectation bloc et traçabilité (Zone Stérile)."
               accent="border-[#1378ac]/20 bg-[#edf5f9] text-[#0b4867]"
               onClick={() => setActiveModule("storage-distri")}
+            />
+
+            <DashboardCard
+              step="06"
+              title="Liaison Patient"
+              desc="Lier le matériel utilisé au dossier patient (Post-Opératoire)."
+              accent="border-[#11b5a2]/35 bg-[#eafaf7] text-[#0b786e]"
+              onClick={() => setActiveModule("liaison")}
             />
           </div>
         </section>
