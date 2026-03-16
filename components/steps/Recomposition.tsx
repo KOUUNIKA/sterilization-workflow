@@ -21,6 +21,9 @@ export function Recomposition() {
     { id: "INST-1022", name: "Pince Kocher 14cm", quantity: 2, status: "pending", packageType: "Papier tissé", expiryDate: "04/03/2028" },
     { id: "INST-1023", name: "Ciseaux Mayo", quantity: 1, status: "pending", packageType: "Conteneur", expiryDate: "04/03/2028" },
     { id: "INST-1024", name: "Porte-aiguille", quantity: 1, status: "pending", packageType: "Papier tissé", expiryDate: "04/03/2028" },
+    { id: "INST-1025", name: "Pince Péan", quantity: 4, status: "pending", packageType: "Papier tissé", expiryDate: "04/03/2028" },
+    { id: "INST-1026", name: "Ciseaux Metzenbaum", quantity: 1, status: "pending", packageType: "Conteneur", expiryDate: "04/03/2028" },
+    { id: "INST-1027", name: "Pince à dissection", quantity: 2, status: "pending", packageType: "Papier tissé", expiryDate: "04/03/2028" },
   ]);
 
   const [agentBadge, setAgentBadge] = useState({ name: "", role: "" });
@@ -52,181 +55,171 @@ export function Recomposition() {
       : null;
 
   return (
-    <div className="min-h-screen px-6 py-6 text-slate-900">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <header className="grid gap-4 xl:grid-cols-[1.18fr_0.82fr]">
-          <section className="rounded-3xl border border-[#d5e2ea] bg-white/95 p-5 shadow-[0_20px_45px_rgba(11,72,103,0.08)]">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div className="space-y-1">
-                <div className="inline-flex items-center rounded-full border border-[#b8cad6] bg-[#edf5f9] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#1378ac]">
-                  Phase 03 • Recomposition
+    <div className="h-full flex flex-col gap-4 text-slate-900 overflow-hidden">
+      {/* Top Panels */}
+      <header className="grid gap-4 xl:grid-cols-[1fr_0.8fr] shrink-0">
+        <section className="rounded-3xl border border-[#d5e2ea] bg-white/95 p-4 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="space-y-0.5">
+              <div className="inline-flex items-center rounded-full border border-[#b8cad6] bg-[#edf5f9] px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.24em] text-[#1378ac]">
+                Phase 03 • Recomposition
+              </div>
+              <h1 className="text-xl font-semibold tracking-tight text-[#0b4867]">Recomposition</h1>
+              <p className="text-[10px] font-medium text-slate-500">Contrôle, état et emballage.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <HeaderTile label="Secteur" value="Zone propre" />
+              <HeaderTile label="Statut" value={isComplete ? "Prêt" : "En cours"} />
+            </div>
+          </div>
+        </section>
+
+        <TopOperatorPanel
+          confirmed={operatorConfirmed}
+          waitingText="Scanner le badge"
+          name={agentBadge.name}
+          role={agentBadge.role}
+        />
+      </header>
+
+      {/* Main Grid Area */}
+      <div className="flex-1 grid gap-4 xl:grid-cols-[0.8fr_1.2fr] min-h-0 overflow-hidden">
+        {/* Left Column: Identification */}
+        <section className={`bg-white/95 p-5 rounded-3xl border shadow-sm transition-all duration-500 flex flex-col overflow-hidden shrink-0 ${basketScanned ? 'border-[#11b5a2] ring-4 ring-[#eafaf7]' : 'border-[#d5e2ea]'}`}>
+          <div className="mb-4 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1378ac] text-[10px] font-semibold text-white shadow-lg">01</span>
+              <h2 className="text-sm font-semibold tracking-tight text-[#0b4867]">Identification panier</h2>
+            </div>
+            {basketScanned && <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.18em] text-[#0b786e]">Scanné</span>}
+          </div>
+          
+          {!basketScanned ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] text-slate-400 p-6">
+              <div className="text-4xl opacity-50">🧺</div>
+              <p className="font-bold text-[9px] uppercase tracking-[0.2em] text-center">Scanner le panier</p>
+            </div>
+          ) : (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-center justify-between rounded-2xl border border-[#bdece4] bg-[#eafaf7] p-4">
+                <div>
+                  <p className="mb-1 text-[8px] font-semibold uppercase tracking-[0.24em] text-[#0b786e]">Identifié</p>
+                  <p className="text-base font-semibold tracking-tight text-[#0b4867]">Boîte chirurgie #42</p>
                 </div>
-                <h1 className="text-3xl font-semibold tracking-tight text-[#0b4867]">Recomposition</h1>
-                <p className="text-sm font-medium text-slate-500">Contrôle, état et emballage en vue compacte.</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <HeaderTile label="Secteur" value="Zone propre" />
-                <HeaderTile label="Statut" value={isComplete ? "Prêt à imprimer" : "En cours"} />
+                <div className="text-3xl opacity-20">🧺</div>
               </div>
             </div>
-          </section>
+          )}
+        </section>
 
-          <TopOperatorPanel
-            confirmed={operatorConfirmed}
-            waitingText="Scanner le badge de l'opérateur recomposition"
-            name={agentBadge.name}
-            role={agentBadge.role}
-          />
-        </header>
-
-        <div className="grid gap-6 xl:grid-cols-[0.9fr_1.35fr] xl:items-start">
-          <section className={`bg-white/95 p-6 rounded-3xl border shadow-[0_20px_45px_rgba(11,72,103,0.08)] transition-all duration-500 flex flex-col ${basketScanned ? 'border-[#11b5a2] ring-4 ring-[#eafaf7]' : 'border-[#d5e2ea]'}`}>
-            <div className="mb-5 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1378ac] text-sm font-semibold text-white shadow-lg">01</span>
-                <h2 className="text-xl font-semibold tracking-tight text-[#0b4867]">Identification panier</h2>
-              </div>
-              {basketScanned && <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[#0b786e]">Scanné</span>}
+        {/* Right Column: Instrument Table */}
+        <section className={`bg-white/95 p-5 rounded-3xl border shadow-sm transition-all duration-500 flex flex-col overflow-hidden ${basketScanned ? 'border-[#d5e2ea]' : 'opacity-40 pointer-events-none'}`}>
+          <div className="mb-4 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1378ac] text-[10px] font-semibold text-white shadow-lg">02</span>
+              <h2 className="text-sm font-semibold tracking-tight text-[#0b4867]">Contrôle & état</h2>
             </div>
-            
-            {!basketScanned ? (
-              <div className="flex min-h-[220px] flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] py-10 text-slate-400">
-                <div className="text-6xl opacity-50">🧺</div>
-                <p className="font-bold text-sm uppercase tracking-[0.2em] text-center px-4">Scanner le code-barres du panier de lavage</p>
-              </div>
-            ) : (
-              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex items-center justify-between rounded-2xl border border-[#bdece4] bg-[#eafaf7] p-6">
-                  <div>
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#0b786e]">Panier identifié</p>
-                    <p className="text-3xl font-semibold tracking-tight text-[#0b4867]">Boîte chirurgie générale #42</p>
-                  </div>
-                  <div className="text-5xl opacity-20">🧺</div>
-                </div>
-              </div>
-            )}
-          </section>
+            {allInstrumentsValidated && <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.18em] text-[#0b786e]">Vérifié</span>}
+          </div>
 
-          <section className={`bg-white/95 p-6 rounded-3xl border shadow-[0_20px_45px_rgba(11,72,103,0.08)] transition-all duration-500 flex flex-col ${basketScanned ? 'border-[#d5e2ea] opacity-100 xl:row-span-2' : 'border-[#d5e2ea] opacity-40 pointer-events-none xl:row-span-2'}`}>
-            <div className="mb-5 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1378ac] text-sm font-semibold text-white shadow-lg">02</span>
-                <h2 className="text-xl font-semibold tracking-tight text-[#0b4867]">Contrôle & état</h2>
-              </div>
-              {allInstrumentsValidated && <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[#0b786e]">Vérifié</span>}
-            </div>
-
-            <div className="overflow-hidden rounded-2xl border border-[#d5e2ea] bg-white shadow-sm">
-              <table className="w-full text-left">
-                <thead className="bg-[#0b4867] text-white text-[10px] font-semibold uppercase tracking-[0.18em]">
+          <div className="flex-1 overflow-hidden flex flex-col rounded-2xl border border-[#d5e2ea] bg-white shadow-sm min-h-[200px]">
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              <table className="w-full text-left table-fixed">
+                <thead className="sticky top-0 z-10 bg-[#0b4867] text-white text-[9px] font-semibold uppercase tracking-[0.18em]">
                   <tr>
-                    <th className="p-4">ID instrument</th>
-                    <th className="p-4">Désignation</th>
-                    <th className="p-4 text-center">Quantité</th>
-                    <th className="p-4 text-center">Statut / Action</th>
-                    <th className="p-4 text-center">Emballage</th>
+                    <th className="p-3 w-24">ID</th>
+                    <th className="p-3">Désignation</th>
+                    <th className="p-3 w-16 text-center">Qté</th>
+                    <th className="p-3 w-48 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#edf5f9]">
                   {instruments.map((inst) => (
-                    <tr key={inst.id} className="hover:bg-[#f8fbfd] transition-colors">
-                      <td className="p-4 font-mono text-xs font-semibold text-[#1378ac]">{inst.id}</td>
-                      <td className="p-4 text-sm font-semibold text-slate-700">{inst.name}</td>
-                      <td className="p-4 text-center text-lg font-semibold">x{inst.quantity}</td>
-                      <td className="p-4">
-                        <div className="flex justify-center gap-2">
-                          <button 
-                            onClick={() => updateStatus(inst.id, "validated")}
-                            className={`rounded-xl px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.16em] transition-all ${inst.status === "validated" ? "bg-[#11b5a2] text-white shadow-lg" : "bg-slate-100 text-slate-400 hover:bg-[#eafaf7] hover:text-[#0b786e]"}`}
-                          >
-                            Valide
-                          </button>
-                          <button 
-                            onClick={() => updateStatus(inst.id, "defective")}
-                            className={`rounded-xl px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.16em] transition-all ${inst.status === "defective" ? "bg-[#0b4867] text-white shadow-lg" : "bg-slate-100 text-slate-400 hover:bg-[#edf5f9] hover:text-[#0b4867]"}`}
-                          >
-                            Défect.
-                          </button>
-                          <button 
-                            onClick={() => updateStatus(inst.id, "missing")}
-                            className={`rounded-xl px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.16em] transition-all ${inst.status === "missing" ? "bg-[#d6455d] text-white shadow-lg" : "bg-slate-100 text-slate-400 hover:bg-[#fdecef] hover:text-[#d6455d]"}`}
-                          >
-                            Manquant
-                          </button>
+                    <tr key={inst.id} className="hover:bg-[#f8fbfd] transition-colors text-[11px]">
+                      <td className="p-3 font-mono font-semibold text-[#1378ac] truncate">{inst.id}</td>
+                      <td className="p-3 font-semibold text-slate-700 truncate">{inst.name}</td>
+                      <td className="p-3 text-center text-sm font-semibold">x{inst.quantity}</td>
+                      <td className="p-3">
+                        <div className="flex justify-center gap-1.5">
+                          <StatusBtn active={inst.status === "validated"} label="V" color="teal" onClick={() => updateStatus(inst.id, "validated")} />
+                          <StatusBtn active={inst.status === "defective"} label="D" color="blue" onClick={() => updateStatus(inst.id, "defective")} />
+                          <StatusBtn active={inst.status === "missing"} label="M" color="red" onClick={() => updateStatus(inst.id, "missing")} />
                         </div>
                       </td>
-                      <td className="p-4 text-center text-xs font-medium text-slate-400">{inst.packageType}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          </div>
 
-            {showDefectPanel && selectedInstrument && (
-              <div className="mt-6 rounded-2xl border border-[#b8cad6] bg-[#edf5f9] p-6 animate-in zoom-in duration-500">
-                <div className="mb-5 flex items-center justify-between">
-                  <h3 className="text-xs font-semibold uppercase tracking-[0.22em] text-[#1378ac]">Signalement défaut : {selectedInstrument.name}</h3>
-                  <button onClick={() => setShowDefectPanel(false)} className="font-semibold text-[#1378ac]">✕</button>
-                </div>
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div className="rounded-xl border border-white bg-white p-4 shadow-sm">
-                    <h4 className="mb-1 text-[9px] font-semibold uppercase tracking-[0.16em] opacity-40">Agent</h4>
-                    <p className="text-xs font-medium text-slate-700">{agentBadge.name || "---"}</p>
-                  </div>
-                  <div className="rounded-xl border border-white bg-white p-4 shadow-sm">
-                    <h4 className="mb-1 text-[9px] font-semibold uppercase tracking-[0.16em] opacity-40">Type défaut</h4>
-                    <p className="text-xs font-medium text-slate-700">Mors émoussés</p>
-                  </div>
-                  <div className="rounded-xl border border-white bg-white p-4 shadow-sm">
-                    <h4 className="mb-1 text-[9px] font-semibold uppercase tracking-[0.16em] opacity-40">Localisation stock</h4>
-                    <p className="text-xs font-medium text-slate-700">Armoire B - T04</p>
-                  </div>
-                </div>
-                <div className="mt-6 flex justify-center">
-                  <button onClick={() => setShowDefectPanel(false)} className="rounded-xl bg-[#11b5a2] px-12 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-white shadow-lg">
-                    Valider le remplacement
-                  </button>
-                </div>
+          {showDefectPanel && selectedInstrument && (
+            <div className="mt-4 rounded-xl border border-[#b8cad6] bg-[#edf5f9] p-4 shrink-0 animate-in zoom-in duration-300">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-[9px] font-semibold uppercase tracking-[0.22em] text-[#1378ac]">Signalement : {selectedInstrument.name}</h3>
+                <button onClick={() => setShowDefectPanel(false)} className="text-sm font-bold text-[#1378ac]">✕</button>
               </div>
-            )}
-          </section>
-
-        </div>
-
-        <div className="flex justify-center pb-10 pt-2">
-          <button 
-            onClick={() => alert('Étiquette Imprimée !')}
-            disabled={!isComplete}
-            className={`group relative rounded-2xl px-24 py-5 text-sm font-semibold uppercase tracking-[0.22em] transition-all duration-500 shadow-[0_20px_40px_rgba(11,72,103,0.14)] ${isComplete ? 'bg-[#1378ac] text-white hover:bg-[#0f6a98] hover:-translate-y-1.5 active:scale-95' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
-          >
-            {isComplete && <span className="absolute -top-3 -right-3 rounded-full bg-[#11b5a2] p-2 text-xs font-semibold text-white shadow-lg">✓</span>}
-            Imprimer l&apos;étiquette
-          </button>
-        </div>
-
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                 <div className="rounded-xl bg-white p-2.5 shadow-sm text-center">
+                    <p className="text-[7px] font-bold uppercase opacity-40">Défaut</p>
+                    <p className="text-[10px] font-semibold text-slate-700">Mors émoussés</p>
+                 </div>
+                 <div className="rounded-xl bg-white p-2.5 shadow-sm text-center">
+                    <p className="text-[7px] font-bold uppercase opacity-40">Stock</p>
+                    <p className="text-[10px] font-semibold text-slate-700">Armoire B</p>
+                 </div>
+              </div>
+              <button onClick={() => setShowDefectPanel(false)} className="w-full rounded-xl bg-[#11b5a2] py-2 text-[9px] font-semibold uppercase tracking-[0.2em] text-white shadow-md hover:bg-[#0fa391] transition-all">
+                Valider remplacement
+              </button>
+            </div>
+          )}
+        </section>
       </div>
 
-      {quickActionLabel && (
-        <button
-          onClick={triggerSimulation}
-          className="fixed bottom-8 right-8 z-50 flex items-center gap-3 rounded-2xl bg-[#0b4867] px-7 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-[0_24px_45px_rgba(11,72,103,0.28)] transition-all hover:bg-[#0a3952] hover:scale-105 active:scale-95 group"
+      {/* Footer Section */}
+      <footer className="shrink-0 flex items-center justify-between bg-white/80 backdrop-blur-md p-3 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto">
+        <button 
+          onClick={() => alert('Étiquette Imprimée !')}
+          disabled={!isComplete}
+          className={`group relative rounded-xl px-10 py-3 text-[10px] font-semibold uppercase tracking-[0.22em] transition-all duration-300 ${isComplete ? 'bg-[#1378ac] text-white hover:bg-[#0f6a98] shadow-md' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
         >
-          <span className="text-xl text-[#8de7da]">⌁</span>
-          <span>{quickActionLabel}</span>
+          {isComplete && <span className="absolute -top-1.5 -right-1.5 rounded-full bg-[#11b5a2] p-1 text-[8px] font-semibold text-white shadow-lg">✓</span>}
+          Imprimer l&apos;étiquette
         </button>
-      )}
 
+        {quickActionLabel && (
+          <button
+            onClick={triggerSimulation}
+            className="flex items-center gap-2 rounded-full bg-[#0b4867] px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-white shadow-md transition-all hover:bg-[#0a3952] group"
+          >
+            <span className="text-lg text-[#8de7da]">⌁</span>
+            <span>{quickActionLabel}</span>
+          </button>
+        )}
+      </footer>
     </div>
+  );
+}
+
+function StatusBtn({ active, label, color, onClick }: { active: boolean, label: string, color: 'teal'|'blue'|'red', onClick: () => void }) {
+  const colors = {
+    teal: active ? 'bg-[#11b5a2] text-white shadow-md' : 'bg-slate-100 text-slate-400 hover:bg-[#eafaf7]',
+    blue: active ? 'bg-[#0b4867] text-white shadow-md' : 'bg-slate-100 text-slate-400 hover:bg-[#edf5f9]',
+    red: active ? 'bg-[#d6455d] text-white shadow-md' : 'bg-slate-100 text-slate-400 hover:bg-[#fdecef]',
+  };
+  return (
+    <button onClick={onClick} className={`h-8 w-8 rounded-lg text-[9px] font-bold uppercase transition-all ${colors[color]}`}>
+      {label}
+    </button>
   );
 }
 
 function HeaderTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-[#d5e2ea] bg-[#f8fbfd] px-4 py-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-        {label}
-      </p>
-      <p className="mt-1 text-sm font-semibold text-[#0b4867]">{value}</p>
+    <div className="rounded-xl border border-[#d5e2ea] bg-[#f8fbfd] px-2.5 py-1.5">
+      <p className="text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
+      <p className="mt-0.5 text-[10px] font-semibold text-[#0b4867]">{value}</p>
     </div>
   );
 }
@@ -243,48 +236,26 @@ function TopOperatorPanel({
   role: string;
 }) {
   return (
-    <section
-      className={`rounded-3xl border bg-white/95 p-5 shadow-[0_20px_45px_rgba(11,72,103,0.08)] transition-all duration-500 ${
-        confirmed ? "border-[#11b5a2] ring-4 ring-[#eafaf7]" : "border-[#d5e2ea]"
-      }`}
-    >
-      <div className="mb-4 flex items-center justify-between">
+    <section className={`rounded-3xl border bg-white/95 p-4 shadow-sm transition-all duration-500 ${confirmed ? "border-[#11b5a2] ring-4 ring-[#eafaf7]" : "border-[#d5e2ea]"}`}>
+      <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1378ac] text-sm font-semibold text-white shadow-lg">
-            03
-          </span>
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight text-[#0b4867]">Agent responsable</h2>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-              Badge recomposition
-            </p>
-          </div>
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1378ac] text-[10px] font-semibold text-white">03</span>
+          <h2 className="text-sm font-semibold tracking-tight text-[#0b4867]">Agent responsable</h2>
         </div>
-        {confirmed && (
-          <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#0b786e]">
-            Validé
-          </span>
-        )}
+        {confirmed && <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-2.5 py-1 text-[8px] font-semibold uppercase text-[#0b786e]">Validé</span>}
       </div>
 
       {!confirmed ? (
-        <div className="flex min-h-[160px] flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] text-slate-400">
-          <div className="text-4xl opacity-50">👤</div>
-          <p className="px-4 text-center text-xs font-bold uppercase tracking-[0.18em]">
-            {waitingText}
-          </p>
+        <div className="mt-2 h-[45px] flex items-center justify-center rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] text-slate-400">
+          <p className="text-[9px] font-bold uppercase tracking-[0.18em]">{waitingText}</p>
         </div>
       ) : (
-        <div className="rounded-2xl bg-[#0b4867] p-5 text-white">
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full border-4 border-[#0a3952] bg-[#1378ac] text-2xl shadow-inner">
-              👩‍🔬
-            </div>
+        <div className="mt-2 rounded-2xl bg-[#0b4867] p-2.5 text-white">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#0a3952] bg-[#1378ac] text-lg">👩‍🔬</div>
             <div className="min-w-0">
-              <p className="text-lg font-semibold tracking-tight">{name}</p>
-              <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8de7da]">
-                {role}
-              </p>
+              <p className="text-xs font-semibold tracking-tight truncate">{name}</p>
+              <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-[#8de7da] truncate">{role}</p>
             </div>
           </div>
         </div>
