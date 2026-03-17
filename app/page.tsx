@@ -210,28 +210,26 @@ export default function Home() {
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden text-slate-900">
-      <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-8">
-        <section className="space-y-6">
-          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#1378ac]">
-                Modules du cycle
-              </p>
-              <h2 className="text-2xl font-semibold tracking-tight text-[#0b4867]">
-                Cycle de vie complet des dispositifs stériles
-              </h2>
-            </div>
-            <p className="text-sm text-slate-500">
-              Sélectionnez un module opérationnel.
+    <div className="h-full flex flex-col overflow-hidden text-slate-900 px-6 py-4">
+      <div className="flex-1 flex flex-col items-center justify-center min-h-0">
+        <section className="w-full max-w-7xl space-y-8">
+          <div className="text-center space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#1378ac]">
+              Modules du cycle
+            </p>
+            <h2 className="text-3xl font-black tracking-tight text-[#0b4867]">
+              Cycle de vie complet des dispositifs stériles
+            </h2>
+            <p className="text-sm text-slate-500 font-medium">
+              Sélectionnez un module pour accéder au poste opérationnel.
             </p>
           </div>
 
-          <div className="grid w-full grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3 pb-8">
+          <div className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 justify-center items-stretch">
             <DashboardCard
               step="01"
               title="Prédésinfection"
-              desc="Trempage, identification du contenant et validation agent (Zone Sale - Bloc)."
+              desc="Trempage, identification contenant et validation (Zone Sale)."
               accent="border-[#11b5a2]/35 bg-[#eafaf7] text-[#0b786e]"
               onClick={() => setActiveModule("pre")}
             />
@@ -239,7 +237,7 @@ export default function Home() {
             <DashboardCard
               step="02"
               title="Lavage"
-              desc="Entrée machine, conformité de cycle et libération (Zone Sale/Propre - Service)."
+              desc="Entrée machine, conformité cycle et libération (Zone Sale/Propre)."
               accent="border-[#1378ac]/25 bg-[#e8f4fb] text-[#1378ac]"
               onClick={() => setActiveModule("lavage-chargement")}
             />
@@ -247,7 +245,7 @@ export default function Home() {
             <DashboardCard
               step="03"
               title="Recomposition"
-              desc="Contrôle instruments, emballage et étiquette (Zone Propre - Service)."
+              desc="Contrôle instruments, AI Vision et étiquetage (Zone Propre)."
               accent="border-[#0b4867]/20 bg-[#edf5f9] text-[#0b4867]"
               onClick={() => setActiveModule("recomp")}
             />
@@ -278,8 +276,8 @@ export default function Home() {
 
             <DashboardCard
               step="07"
-              title="Inventaire & Configuration"
-              desc="Gestion du référentiel : boîtes, instruments et types d'emballage."
+              title="Inventaire & Config"
+              desc="Gestion du référentiel : boîtes, instruments et emballages."
               accent="border-[#0b4867]/20 bg-[#edf5f9] text-[#0b4867]"
               onClick={() => setActiveModule("inventory")}
             />
@@ -287,12 +285,12 @@ export default function Home() {
         </section>
       </div>
 
-      <footer className="shrink-0 flex items-center justify-between rounded-2xl border border-[#d5e2ea] bg-white/80 px-5 py-4 text-[10px] text-slate-500 shadow-sm mt-4">
+      <footer className="shrink-0 flex items-center justify-between rounded-2xl border border-[#d5e2ea] bg-white/80 px-5 py-3 text-[10px] text-slate-500 shadow-sm mt-auto">
         <span className="font-medium uppercase tracking-[0.24em]">
-          Centre de sterilisation
+          Centre de sterilisation • Hospital Operational Suite
         </span>
         <span className="font-medium text-[#1378ac]">
-          Mise à jour Mars 2026
+          v2.4.0 • Mise à jour Mars 2026
         </span>
       </footer>
     </div>
@@ -315,24 +313,24 @@ function DashboardCard({
   return (
     <button
       onClick={onClick}
-      className="group flex min-h-[250px] flex-col justify-between rounded-3xl border border-[#d5e2ea] bg-white/95 p-6 text-left shadow-[0_18px_40px_rgba(11,72,103,0.08)] transition-all hover:-translate-y-1.5 hover:border-[#1378ac]/40 hover:shadow-[0_24px_50px_rgba(11,72,103,0.14)] active:scale-[0.99]"
+      className="group flex flex-col justify-between rounded-[2rem] border border-[#d5e2ea] bg-white/95 p-5 text-left shadow-[0_10px_30px_rgba(11,72,103,0.05)] transition-all hover:-translate-y-1 hover:border-[#1378ac]/40 hover:shadow-[0_20px_45px_rgba(11,72,103,0.1)] active:scale-[0.98]"
     >
-      <div className="space-y-5">
+      <div className="space-y-4">
         <div
-          className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold tracking-[0.24em] ${accent}`}
+          className={`inline-flex items-center rounded-full border px-3 py-1 text-[9px] font-black tracking-[0.24em] ${accent}`}
         >
           Module {step}
         </div>
-        <div className="space-y-3">
-          <h3 className="text-xl font-semibold tracking-tight text-[#0b4867]">
+        <div className="space-y-2">
+          <h3 className="text-lg font-black tracking-tight text-[#0b4867] leading-tight">
             {title}
           </h3>
-          <p className="text-sm leading-6 text-slate-500">{desc}</p>
+          <p className="text-[11px] leading-relaxed text-slate-500 font-medium">{desc}</p>
         </div>
       </div>
-      <div className="mt-6 flex items-center gap-2 text-sm font-semibold text-[#1378ac]">
-        Acceder au module
-        <span className="transition-transform group-hover:translate-x-1">→</span>
+      <div className="mt-5 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#1378ac]">
+        Accéder
+        <span className="transition-transform group-hover:translate-x-1 text-sm">→</span>
       </div>
     </button>
   );
