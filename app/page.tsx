@@ -9,7 +9,6 @@ import { SterilizationWizard } from "@/components/steps/Sterilization";
 import { StorageDistribution } from "@/components/steps/StorageDistribution";
 import { PatientLiaison } from "@/components/PatientLiaison";
 import { InventoryManagement } from "@/components/InventoryManagement";
-import { Chatbot } from "@/components/Chatbot";
 
 export type WorkflowZone = 
   | "zone-sale"
@@ -168,8 +167,15 @@ export default function Home() {
             {content}
           </div>
           
-          {/* Persistent Chatbot - Fixed but doesn't block layout */}
-          <Chatbot currentZone={currentZone} />
+          {/* Global Footer Bar */}
+          <footer className="shrink-0 flex items-center justify-between px-6 py-3 bg-white/80 backdrop-blur-sm border-t border-[#d5e2ea] text-[9px] font-bold uppercase tracking-[0.24em] text-slate-400">
+            <div>
+              Centre de stérilisation • Hospital Operational Suite
+            </div>
+            <div className="text-[#1378ac]">
+              v2.4.0 • Mise à jour Mars 2026
+            </div>
+          </footer>
         </main>
       </div>
     );
@@ -209,8 +215,8 @@ export default function Home() {
     return renderLayout(<div className="bg-white p-10 rounded-3xl border border-[#d5e2ea] shadow-sm"><h2 className="text-2xl font-bold text-[#0b4867]">Edition</h2><p className="mt-4 text-slate-500">Interface d'édition en attente de configuration.</p></div>);
   }
 
-  return (
-    <div className="h-full flex flex-col overflow-hidden text-slate-900 px-6 py-4">
+  return renderLayout(
+    <div className="h-full flex flex-col overflow-hidden text-slate-900">
       <div className="flex-1 flex flex-col items-center justify-center min-h-0">
         <section className="w-full max-w-7xl space-y-8">
           <div className="text-center space-y-2">
@@ -284,15 +290,6 @@ export default function Home() {
           </div>
         </section>
       </div>
-
-      <footer className="shrink-0 flex items-center justify-between rounded-2xl border border-[#d5e2ea] bg-white/80 px-5 py-3 text-[10px] text-slate-500 shadow-sm mt-auto">
-        <span className="font-medium uppercase tracking-[0.24em]">
-          Centre de sterilisation • Hospital Operational Suite
-        </span>
-        <span className="font-medium text-[#1378ac]">
-          v2.4.0 • Mise à jour Mars 2026
-        </span>
-      </footer>
     </div>
   );
 }
