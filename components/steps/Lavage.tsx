@@ -218,7 +218,7 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange }: LavageWizardPr
         )}
       </div>
 
-      <footer className="shrink-0 flex items-center justify-between bg-white/80 backdrop-blur-md p-3 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto">
+      <footer className="shrink-0 flex items-center justify-center bg-white/80 backdrop-blur-md p-3 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto">
         {phase === 1 ? (
           <button 
             onClick={() => { alert('Cycle Lavage Lancé !'); handlePhaseChange(2); }}
@@ -242,7 +242,7 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange }: LavageWizardPr
         {quickActionLabel && (
           <button
             onClick={triggerSimulation}
-            className={`flex items-center gap-2 rounded-full px-6 py-3.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-white shadow-md transition-all group ${phase === 1 ? 'bg-[#0b4867]' : 'bg-[#11b5a2]'}`}
+            className={`absolute right-6 flex items-center gap-2 rounded-full px-6 py-3.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-white shadow-md transition-all group ${phase === 1 ? 'bg-[#0b4867]' : 'bg-[#11b5a2]'}`}
           >
             <span className="text-lg text-white/85">⌁</span>
             <span>{quickActionLabel}</span>

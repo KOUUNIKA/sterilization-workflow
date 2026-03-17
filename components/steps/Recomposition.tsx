@@ -289,11 +289,11 @@ export function Recomposition() {
               </div>
 
               {/* STEP 6: Final Action */}
-              <div className="p-6 border-t border-[#d5e2ea] bg-[#f8fbfd] shrink-0">
+              <div className="p-6 border-t border-[#d5e2ea] bg-[#f8fbfd] shrink-0 flex justify-center">
                 <button 
                   onClick={() => setShowPrintPreview(true)}
                   disabled={!isInventoryComplete}
-                  className={`w-full group flex items-center justify-center gap-5 py-6 rounded-[1.5rem] font-black uppercase tracking-[0.3em] text-xs transition-all shadow-2xl ${
+                  className={`w-full max-w-md group flex items-center justify-center gap-5 py-6 rounded-[1.5rem] font-black uppercase tracking-[0.3em] text-xs transition-all shadow-2xl ${
                     isInventoryComplete 
                       ? 'bg-[#1378ac] text-white hover:bg-[#0f6a98] hover:-translate-y-1.5 active:scale-95 shadow-[0_20px_40px_rgba(19,120,172,0.3)]' 
                       : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'

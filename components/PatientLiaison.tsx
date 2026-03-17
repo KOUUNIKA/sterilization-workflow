@@ -132,7 +132,7 @@ export function PatientLiaison() {
       </section>
 
       {/* Footer Section */}
-      <footer className="shrink-0 flex items-center justify-between bg-white/80 backdrop-blur-md p-3 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto">
+      <footer className="shrink-0 flex items-center justify-center bg-white/80 backdrop-blur-md p-3 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto">
         <button 
           onClick={() => alert("Liaison Patient Validée !")}
           disabled={!isComplete}
@@ -142,7 +142,7 @@ export function PatientLiaison() {
           Valider liaison
         </button>
 
-        <div className="flex gap-2">
+        <div className="absolute right-6 flex gap-2">
           <SimBtn icon="👤" label="Patient" onClick={simulatePatientScan} active={patientScanned} />
           <SimBtn icon="🏷️" label="Box" onClick={simulateBoxScan} active={patientScanned} />
           <SimBtn icon="🪪" label="Badge" onClick={simulateNurseScan} active={nurseConfirmed} />

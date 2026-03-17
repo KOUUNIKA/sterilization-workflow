@@ -271,11 +271,11 @@ export function PredesinfectionWizard({ cycleId }: PredesinfectionWizardProps) {
       </div>
 
       {/* Footer Actions - Always Visible */}
-      <div className="shrink-0 flex items-center justify-between bg-white/80 backdrop-blur-md p-3 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto">
+      <div className="shrink-0 flex items-center justify-center bg-white/80 backdrop-blur-md p-3 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto">
         <button
           onClick={() => alert("Prédésinfection Terminée !")}
           disabled={!isComplete}
-          className={`group relative rounded-xl px-8 py-3 text-[10px] font-semibold uppercase tracking-[0.22em] transition-all duration-300 ${
+          className={`group relative rounded-xl px-12 py-3 text-[10px] font-semibold uppercase tracking-[0.22em] transition-all duration-300 ${
             isComplete
               ? "bg-[#1378ac] text-white hover:bg-[#0f6a98] shadow-md"
               : "bg-slate-200 text-slate-400 cursor-not-allowed"
@@ -292,7 +292,7 @@ export function PredesinfectionWizard({ cycleId }: PredesinfectionWizardProps) {
         {quickActionLabel && (
           <button
             onClick={triggerSimulation}
-            className="flex items-center gap-2 rounded-full bg-[#0b4867] px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-white shadow-md transition-all hover:bg-[#0a3952] group"
+            className="absolute right-6 flex items-center gap-2 rounded-full bg-[#0b4867] px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-white shadow-md transition-all hover:bg-[#0a3952] group"
           >
             <span className="text-lg text-[#8de7da]">⌁</span>
             <span>{quickActionLabel}</span>
