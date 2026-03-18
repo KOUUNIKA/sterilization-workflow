@@ -59,7 +59,7 @@ export function PredesinfectionWizard({ cycleId }: PredesinfectionWizardProps) {
   const quickActionLabel = !trayScanned
     ? "Scanner le bac"
     : !boxScanned
-      ? "Scanner le contenant"
+      ? "Scanner le conteneur"
       : !operatorConfirmed
         ? "Scanner le badge"
         : null;
@@ -207,7 +207,7 @@ export function PredesinfectionWizard({ cycleId }: PredesinfectionWizardProps) {
                   02
                 </span>
                 <h2 className="text-sm font-semibold tracking-tight text-[#0b4867]">
-                  Identification contenant
+                  Identification conteneur
                 </h2>
               </div>
               {boxScanned && (
@@ -219,14 +219,14 @@ export function PredesinfectionWizard({ cycleId }: PredesinfectionWizardProps) {
 
             {!boxScanned ? (
               <div className="flex-1 flex">
-                <ScanPlaceholder icon="📦" label="Scanner le contenant" />
+                <ScanPlaceholder icon="📦" label="Scanner le conteneur" />
               </div>
             ) : (
               <div className="flex-1 flex flex-col min-h-0 space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="flex items-center justify-between rounded-2xl border border-[#bdece4] bg-[#eafaf7] p-3 shrink-0">
                   <div>
                     <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-[0.24em] text-[#0b786e]">
-                      ID contenant
+                      ID conteneur
                     </p>
                     <p className="text-sm font-semibold tracking-tight text-[#0b4867]">
                       {boxName}

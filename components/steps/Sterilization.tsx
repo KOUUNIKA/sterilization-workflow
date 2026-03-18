@@ -187,7 +187,7 @@ export function SterilizationWizard({ initialPhase = 1, onPhaseChange }: Sterili
               <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
                 <DataCard label="Machine" value="AUTOCLAVE N° 02" color="purple" />
                 <div className="grid gap-3">
-                  <StatusButton active={autoclaveStatus === 'ready'} onClick={() => setAutoclaveStatus("ready")} color="emerald" icon="✅" label="Ready" />
+                  <StatusButton active={autoclaveStatus === 'ready'} onClick={() => setAutoclaveStatus("ready")} color="emerald" icon="✅" label="Prêt" />
                   <StatusButton active={autoclaveStatus === 'maintenance'} onClick={() => setAutoclaveStatus("maintenance")} color="orange" icon="🛠️" label="Maint." />
                 </div>
               </div>

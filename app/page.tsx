@@ -84,7 +84,7 @@ export default function Home() {
                 <span className="text-xl">🛡️</span>
               </div>
               <div className="hidden lg:block">
-                <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#8de7da]">Sterilization Suite</p>
+                <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#8de7da]">Suite de Stérilisation</p>
                 <p className="text-[10px] font-medium text-white/60">Gestion Opérationnelle</p>
               </div>
             </div>
@@ -107,7 +107,7 @@ export default function Home() {
                 <div className="hidden xl:flex items-center gap-4">
                   <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-xl border border-white/10">
                     <span className="text-[#8de7da] font-bold text-sm">12</span>
-                    <span className="text-[9px] font-bold text-white/70 uppercase tracking-wide">boite(s)</span>
+                    <span className="text-[9px] font-bold text-white/70 uppercase tracking-wide">boîte(s)</span>
                   </div>
                   <button className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-[9px] font-bold uppercase tracking-widest text-white/60 hover:bg-white hover:text-[#0b4867] transition-all">
                     Fiche procédurale
@@ -123,7 +123,7 @@ export default function Home() {
                  onClick={() => setActiveModule(null)}
                  className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${!activeModule ? 'bg-white text-[#0b4867]' : 'hover:bg-white/10 text-white/70'}`}
                >
-                 Dashboard
+                 Tableau de bord
                </button>
                <button 
                  onClick={() => setActiveModule("pre")}
@@ -170,7 +170,7 @@ export default function Home() {
           {/* Global Footer Bar */}
           <footer className="shrink-0 flex items-center justify-between px-6 py-3 bg-white/80 backdrop-blur-sm border-t border-[#d5e2ea] text-[9px] font-bold uppercase tracking-[0.24em] text-slate-400">
             <div>
-              Centre de stérilisation • Hospital Operational Suite
+              Centre de stérilisation • Suite Opérationnelle Hospitalière
             </div>
             <div className="text-[#1378ac]">
               v2.4.0 • Mise à jour Mars 2026
@@ -235,7 +235,7 @@ export default function Home() {
             <DashboardCard
               step="01"
               title="Prédésinfection"
-              desc="Trempage, identification contenant et validation (Zone Sale)."
+              desc="Trempage, identification conteneur et validation (Zone Sale)."
               accent="border-[#11b5a2]/35 bg-[#eafaf7] text-[#0b786e]"
               onClick={() => setActiveModule("pre")}
             />

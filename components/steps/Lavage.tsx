@@ -174,7 +174,7 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange }: LavageWizardPr
               <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <DataCard label="Machine" value="LD-UNIT-02" color="emerald" />
                 <div className="grid grid-cols-2 gap-3">
-                  <StatusButton active={laveurStatus === 'ready'} onClick={() => setLaveurStatus("ready")} color="emerald" icon="✅" label="Ready" />
+                  <StatusButton active={laveurStatus === 'ready'} onClick={() => setLaveurStatus("ready")} color="emerald" icon="✅" label="Prêt" />
                   <StatusButton active={laveurStatus === 'maintenance'} onClick={() => setLaveurStatus("maintenance")} color="orange" icon="🛠️" label="Maint." />
                 </div>
               </div>

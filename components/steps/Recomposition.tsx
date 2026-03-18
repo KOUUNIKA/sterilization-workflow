@@ -103,7 +103,7 @@ export function Recomposition() {
           <header className="shrink-0 bg-white border border-[#d5e2ea] rounded-3xl p-5 flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-8">
               <div className="flex flex-col">
-                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 mb-1">Basket Traceability</span>
+                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 mb-1">Traçabilité Panier</span>
                 <div className="flex items-center gap-3">
                   <span className="h-8 w-8 rounded-lg bg-[#edf5f9] flex items-center justify-center text-lg shadow-inner">🧺</span>
                   <span className="text-xl font-black tracking-tighter text-[#0b4867]">PAN-2026-X8</span>
@@ -111,10 +111,10 @@ export function Recomposition() {
               </div>
               <div className="h-10 w-px bg-[#d5e2ea]" />
               <div className="flex flex-col">
-                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-[#1378ac] mb-1">Target Device</span>
+                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-[#1378ac] mb-1">Dispositif Cible</span>
                 <div className="flex items-center gap-3">
                   <span className="h-8 w-8 rounded-lg bg-[#e8f4fb] flex items-center justify-center text-lg shadow-inner">📦</span>
-                  <span className="text-xl font-black tracking-tighter text-[#0b4867]">CHIRURGIE GENERALE #42</span>
+                  <span className="text-xl font-black tracking-tighter text-[#0b4867]">CHIRURGIE GÉNÉRALE #42</span>
                 </div>
               </div>
             </div>
@@ -133,7 +133,7 @@ export function Recomposition() {
                 <div className="flex items-center justify-between mb-5 shrink-0">
                   <div className="flex items-center gap-3">
                     <span className="h-6 w-6 rounded-full bg-[#1378ac] text-white flex items-center justify-center text-[10px] font-black shadow-md">02</span>
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Smart AI Recognition Table</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Table de reconnaissance intelligente IA</h3>
                   </div>
                   {aiState === "completed" && (
                     <div className="flex items-center gap-2 bg-[#eafaf7] text-[#11b5a2] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase border border-[#bdece4] shadow-sm">
@@ -141,7 +141,7 @@ export function Recomposition() {
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#11b5a2] opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-[#11b5a2]"></span>
                       </span>
-                      Deep Learning Active
+                      Deep Learning Actif
                     </div>
                   )}
                 </div>
@@ -155,7 +155,7 @@ export function Recomposition() {
                       <div className="h-24 w-24 rounded-[2rem] bg-white flex items-center justify-center text-5xl shadow-xl border border-[#d5e2ea] group-hover:border-[#1378ac] group-hover:shadow-[0_20px_40px_rgba(19,120,172,0.2)] transition-all">🤖</div>
                       <div className="text-center">
                         <span className="block font-black text-[11px] uppercase tracking-[0.3em]">Activer Vision IA</span>
-                        <span className="text-[9px] text-slate-400 mt-1 block font-bold">Scanning Multimodal & OCR</span>
+                        <span className="text-[9px] text-slate-400 mt-1 block font-bold">Analyse Multimodale & OCR</span>
                       </div>
                     </button>
                   )}
@@ -167,8 +167,8 @@ export function Recomposition() {
                         <div className="absolute inset-0 flex items-center justify-center text-3xl">👁️</div>
                       </div>
                       <div className="text-center">
-                        <p className="text-[#1378ac] font-black text-[11px] uppercase tracking-[0.4em] animate-pulse">Analysis in Progress</p>
-                        <p className="text-slate-400 text-[9px] mt-2 font-bold italic tracking-widest">Processing geometry, texture and ID-marks...</p>
+                        <p className="text-[#1378ac] font-black text-[11px] uppercase tracking-[0.4em] animate-pulse">Analyse en cours</p>
+                        <p className="text-slate-400 text-[9px] mt-2 font-bold italic tracking-widest">Traitement géométrie, texture et marquages ID...</p>
                       </div>
                     </div>
                   )}
@@ -187,7 +187,7 @@ export function Recomposition() {
                             inst.status === 'validated' ? 'text-[#0b786e] bg-[#eafaf7] border-[#bdece4]' : 
                             inst.status === 'missing' ? 'text-[#b45309] bg-[#fff6e9] border-[#ffe4bc]' : 
                             'text-[#d6455d] bg-[#fdecef] border-[#f8d7da]'
-                          }`}>{inst.status}</span>
+                          }`}>{inst.status === 'validated' ? 'validé' : inst.status === 'missing' ? 'manquant' : 'défectueux'}</span>
                         </div>
                       ))}
                       <div className="absolute inset-0 bg-gradient-to-b from-[#1378ac]/5 to-transparent h-1/2 w-full animate-scan pointer-events-none border-t-[3px] border-[#1378ac]/30" />
@@ -226,7 +226,7 @@ export function Recomposition() {
               <div className="p-6 border-b border-[#d5e2ea] bg-[#f8fbfd] shrink-0">
                 <div className="flex items-center gap-3 mb-5">
                   <span className="h-6 w-6 rounded-full bg-[#1378ac] text-white flex items-center justify-center text-[10px] font-black shadow-md">03</span>
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-[#0b4867]">Inventaire & Compliance</h3>
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-[#0b4867]">Inventaire & Conformité</h3>
                 </div>
                 
                 {/* Visual Category Tabs */}
@@ -273,13 +273,13 @@ export function Recomposition() {
                             <button 
                               onClick={() => openDefectModal(inst)}
                               className="px-4 py-2 bg-[#d6455d] text-white text-[9px] font-black uppercase rounded-xl shadow-[0_4px_12px_rgba(214,69,93,0.3)] hover:scale-105 transition-all"
-                            >Log Defect</button>
+                            >Signaler</button>
                           )}
                           {inst.status === "missing" && (
                             <button 
                               onClick={() => setInstruments(prev => prev.map(i => i.id === inst.id ? {...i, status: 'validated'} : i))}
                               className="px-4 py-2 bg-[#f59e0b] text-white text-[9px] font-black uppercase rounded-xl shadow-[0_4px_12px_rgba(245,158,11,0.3)] hover:scale-105 transition-all"
-                            >Found</button>
+                            >Trouvé</button>
                           )}
                         </div>
                       </div>
@@ -300,7 +300,7 @@ export function Recomposition() {
                   }`}
                 >
                   <span className="text-2xl group-hover:scale-110 transition-transform">🖨️</span>
-                  Print Traceability Label
+                  Imprimer l'étiquette de traçabilité
                 </button>
               </div>
             </section>
@@ -317,8 +317,8 @@ export function Recomposition() {
               <div className="flex items-center gap-5 mb-4">
                 <div className="h-14 w-14 rounded-2xl bg-white/10 flex items-center justify-center text-3xl border border-white/10 shadow-inner">⚠️</div>
                 <div>
-                  <h3 className="text-3xl font-black tracking-tighter uppercase leading-none">Log Defect</h3>
-                  <p className="text-white/70 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Anomaly Management Workflow</p>
+                  <h3 className="text-3xl font-black tracking-tighter uppercase leading-none">Signaler un défaut</h3>
+                  <p className="text-white/70 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Flux de gestion des anomalies</p>
                 </div>
               </div>
             </div>
@@ -327,7 +327,7 @@ export function Recomposition() {
               <div className="grid grid-cols-2 gap-8">
                 <div className="space-y-3">
                   <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#d6455d]" /> Agent Reporting
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#d6455d]" /> Agent déclarant
                   </label>
                   <div className="flex items-center gap-4 bg-[#f8fbfd] p-4 rounded-2xl border border-[#d5e2ea] shadow-inner">
                     <span className="text-2xl">👩‍🔬</span>
@@ -336,7 +336,7 @@ export function Recomposition() {
                 </div>
                 <div className="space-y-3">
                   <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#d6455d]" /> Detection Time
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#d6455d]" /> Heure de détection
                   </label>
                   <div className="bg-[#f8fbfd] p-4 rounded-2xl border border-[#d5e2ea] text-xs font-black text-slate-600 shadow-inner tracking-tight">
                     {new Date().toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}
@@ -346,7 +346,7 @@ export function Recomposition() {
 
               <div className="space-y-3">
                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#d6455d]" /> Critical Asset Info
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#d6455d]" /> Infos sur l'instrument critique
                 </label>
                 <div className="bg-[#fdecef]/60 p-5 rounded-3xl border border-[#f8d7da] flex items-center justify-between">
                   <div>
@@ -359,7 +359,7 @@ export function Recomposition() {
 
               <div className="space-y-3">
                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#d6455d]" /> Quality Defect Cause
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#d6455d]" /> Cause du défaut qualité
                 </label>
                 <div className="relative">
                   <select className="w-full bg-[#f8fbfd] border-2 border-[#d5e2ea] rounded-2xl p-4 text-xs font-black text-[#0b4867] focus:ring-4 focus:ring-[#d6455d]/10 focus:border-[#d6455d] outline-none appearance-none transition-all cursor-pointer">
@@ -378,12 +378,12 @@ export function Recomposition() {
                 <div className="flex items-center gap-4 mb-3 text-[#0b786e]">
                   <span className="text-3xl animate-bounce">💡</span>
                   <div className="flex flex-col">
-                    <span className="text-[10px] font-black uppercase tracking-[0.3em]">Smart Suggestion</span>
-                    <span className="text-[8px] font-bold text-[#11b5a2] uppercase tracking-[0.1em]">AI Stock Allocation Engine</span>
+                    <span className="text-[10px] font-black uppercase tracking-[0.3em]">Suggestion intelligente</span>
+                    <span className="text-[8px] font-bold text-[#11b5a2] uppercase tracking-[0.1em]">Moteur d'allocation de stock IA</span>
                   </div>
                 </div>
                 <p className="text-sm font-medium text-slate-600 leading-relaxed ml-1">
-                  Asset de remplacement localisé au : <br/>
+                  Instrument de remplacement localisé au : <br/>
                   <span className="text-2xl font-black text-[#0b786e] tracking-tighter">{selectedForDefect.rackLocation}</span>
                 </p>
               </div>
@@ -391,7 +391,7 @@ export function Recomposition() {
               <button 
                 onClick={handleDefectResolution}
                 className="w-full bg-[#11b5a2] text-white py-6 rounded-2xl font-black uppercase tracking-[0.3em] text-xs shadow-[0_20px_40px_rgba(17,181,162,0.3)] hover:bg-[#0fa391] hover:-translate-y-1 active:scale-95 transition-all"
-              >Valider Remplacement & Log</button>
+              >Valider le remplacement et enregistrer</button>
             </div>
           </div>
         </div>
@@ -403,7 +403,7 @@ export function Recomposition() {
           <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl p-10 flex flex-col items-center animate-in slide-in-from-top-8 duration-500">
             <div className="w-full border-4 border-slate-900 p-8 space-y-6 font-mono text-[11px] uppercase relative overflow-hidden">
               {/* Security pattern */}
-              <div className="absolute top-0 right-0 p-2 bg-slate-900 text-white text-[8px] font-black tracking-widest rotate-45 translate-x-6 -translate-y-2 w-32 text-center">VALID</div>
+              <div className="absolute top-0 right-0 p-2 bg-slate-900 text-white text-[8px] font-black tracking-widest rotate-45 translate-x-6 -translate-y-2 w-32 text-center">VALIDÉ</div>
               
               <div className="text-center border-b-4 border-slate-900 pb-6 mb-6">
                 <p className="text-2xl font-black tracking-tighter">ÉTIQUETTE TRAÇABILITÉ</p>
@@ -413,7 +413,7 @@ export function Recomposition() {
               <div className="space-y-3">
                 <div className="flex justify-between items-end border-b border-dashed border-slate-300 pb-1">
                   <span className="font-bold opacity-50">Dispositif:</span>
-                  <span className="font-black text-sm tracking-tighter">CHIRURGIE GENERALE #42</span>
+                  <span className="font-black text-sm tracking-tighter">CHIRURGIE GÉNÉRALE #42</span>
                 </div>
                 <div className="flex justify-between items-end border-b border-dashed border-slate-300 pb-1">
                   <span className="font-bold opacity-50">Destination:</span>
