@@ -6,6 +6,7 @@ import { PredesinfectionWizard } from "@/components/PredesinfectionWizard";
 import { LavageWizard } from "@/components/steps/Lavage";
 import { Recomposition } from "@/components/steps/Recomposition";
 import { SterilizationWizard } from "@/components/steps/Sterilization";
+import { Dechargesterilization } from "@/components/steps/Dechargesterilization";
 import { StorageDistribution } from "@/components/steps/StorageDistribution";
 import { PatientLiaison } from "@/components/PatientLiaison";
 import { InventoryManagement } from "@/components/InventoryManagement";
@@ -197,7 +198,7 @@ export default function Home() {
     return renderLayout(<SterilizationWizard initialPhase={1} onPhaseChange={(p) => setActiveModule(p === 1 ? "steri-chargement" : "steri-sortie")} />);
   }
   if (activeModule === "steri-sortie") {
-    return renderLayout(<SterilizationWizard initialPhase={2} onPhaseChange={(p) => setActiveModule(p === 1 ? "steri-chargement" : "steri-sortie")} />); 
+    return renderLayout(<Dechargesterilization onPhaseChange={(p) => setActiveModule(p === 1 ? "steri-chargement" : "steri-sortie")} />); 
   }
   if (activeModule === "storage-distri") {
     return renderLayout(<StorageDistribution />);
