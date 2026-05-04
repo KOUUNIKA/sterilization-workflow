@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 type InstrumentStatus = "validated" | "missing" | "defective" | "pending";
 
@@ -12,7 +12,7 @@ type Instrument = {
   rackLocation: string;
 };
 
-export function Recomposition() {
+export function Recomposition({ onValidated }: { onValidated?: (isValid: boolean) => void }) {
   // --- States ---
   const [basketScanned, setBasketScanned] = useState(false);
   const [aiState, setAiState] = useState<"idle" | "analyzing" | "completed">("idle");
@@ -78,9 +78,32 @@ export function Recomposition() {
   const expiryDate = new Date();
   expiryDate.setMonth(expiryDate.getMonth() + 6);
 
+  useEffect(() => {
+    onValidated?.(isInventoryComplete);
+  }, [isInventoryComplete, onValidated]);
+
   return (
     <div className="h-full flex flex-col gap-4 text-slate-900 overflow-hidden relative font-app">
-      
+      {/* Quick Action Simulation Button */}
+      {!isInventoryComplete && basketScanned && (
+        <button
+          onClick={aiState === "idle" ? runAiRecognition : undefined}
+          className="fixed bottom-32 right-10 flex items-center gap-3 rounded-full bg-[#0b4867] px-6 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-2xl transition-all hover:bg-[#0a3952] hover:scale-105 active:scale-95 group z-[40]"
+        >
+          <span className="text-xl text-[#8de7da] animate-pulse">⌁</span>
+          <span>{aiState === "idle" ? "Lancer Vision IA" : "Analyse en cours..."}</span>
+        </button>
+      )}
+      {!basketScanned && (
+        <button
+          onClick={handleScan}
+          className="fixed bottom-32 right-10 flex items-center gap-3 rounded-full bg-[#0b4867] px-6 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-2xl transition-all hover:bg-[#0a3952] hover:scale-105 active:scale-95 group z-[40]"
+        >
+          <span className="text-xl text-[#8de7da] animate-pulse">⌁</span>
+          <span>Scanner Panier</span>
+        </button>
+      )}
+
       {!basketScanned ? (
         <div className="flex-1 flex flex-col items-center justify-center bg-white rounded-[2.5rem] border-2 border-dashed border-[#d5e2ea] shadow-sm animate-in fade-in duration-500">
           <div className="h-32 w-32 rounded-full bg-[#f4f8fb] flex items-center justify-center text-6xl mb-8 shadow-inner">🧺</div>
@@ -288,21 +311,7 @@ export function Recomposition() {
                 )}
               </div>
 
-              {/* STEP 6: Final Action */}
-              <div className="p-6 border-t border-[#d5e2ea] bg-[#f8fbfd] shrink-0 flex justify-center">
-                <button 
-                  onClick={() => setShowPrintPreview(true)}
-                  disabled={!isInventoryComplete}
-                  className={`w-full max-w-md group flex items-center justify-center gap-5 py-6 rounded-[1.5rem] font-black uppercase tracking-[0.3em] text-xs transition-all shadow-2xl ${
-                    isInventoryComplete 
-                      ? 'bg-[#1378ac] text-white hover:bg-[#0f6a98] hover:-translate-y-1.5 active:scale-95 shadow-[0_20px_40px_rgba(19,120,172,0.3)]' 
-                      : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                  }`}
-                >
-                  <span className="text-2xl group-hover:scale-110 transition-transform">🖨️</span>
-                  Imprimer l'étiquette de traçabilité
-                </button>
-              </div>
+              {/* STEP 6: Final Action moved to global nav */}
             </section>
           </div>
         </div>

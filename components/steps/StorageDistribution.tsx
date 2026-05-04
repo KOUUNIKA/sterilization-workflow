@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-export function StorageDistribution() {
+export function StorageDistribution({ onValidated }: { onValidated?: (isValid: boolean) => void }) {
   const [phase, setPhase] = useState<1 | 2>(1); // 1: Stockage, 2: Distribution
 
   // --- ÉTATS PHASE 1: STOCKAGE ---
@@ -15,6 +15,13 @@ export function StorageDistribution() {
   const [distriRoom, setDistriRoom] = useState("");
   const [distriAgent, setDistriAgent] = useState({ name: "", role: "" });
   const [distriLinked, setDistriLinked] = useState(false);
+
+  const isStorageComplete = storageItem !== "" && storageShelf !== "" && storageConfirmed;
+  const isDistriComplete = distriItem !== "" && distriRoom !== "" && distriAgent.name !== "" && distriLinked;
+
+  useEffect(() => {
+    onValidated?.(phase === 1 ? isStorageComplete : isDistriComplete);
+  }, [phase, isStorageComplete, isDistriComplete, onValidated]);
 
   const triggerSimulation = () => {
     if (phase === 1) {
@@ -238,13 +245,13 @@ export function StorageDistribution() {
         )}
       </div>
 
-      {/* Quick Action Button - Floating within main area */}
+      {/* Quick Action Button - Floating fixed position */}
       {quickActionLabel && (
         <button
           onClick={triggerSimulation}
-          className="shrink-0 flex items-center justify-center gap-2 rounded-full bg-[#0b4867] px-6 py-3.5 text-[10px] font-bold uppercase tracking-[0.2em] text-white shadow-xl transition-all hover:bg-[#0a3952] hover:scale-105 active:scale-95 group mt-auto self-center"
+          className="fixed bottom-32 left-1/2 -translate-x-1/2 flex items-center justify-center gap-2 rounded-full bg-[#0b4867] px-8 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-2xl transition-all hover:bg-[#0a3952] hover:scale-105 active:scale-95 group z-[40]"
         >
-          <span className="text-lg text-[#8de7da]">⌁</span>
+          <span className="text-xl text-[#8de7da] animate-pulse">⌁</span>
           <span>{quickActionLabel}</span>
         </button>
       )}

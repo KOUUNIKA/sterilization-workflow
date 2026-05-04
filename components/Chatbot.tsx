@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { type WorkflowZone } from "./Sidebar";
+import { type WorkflowZone } from "./types";
 
 interface Message {
   id: string;

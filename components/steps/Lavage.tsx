@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useState, useEffect } from "react";
 
 type DashboardSectionProps = {
   index: string;
@@ -9,6 +9,7 @@ type DashboardSectionProps = {
   icon: string;
   waitingText: string;
   children: ReactNode;
+  forceShow?: boolean;
 };
 
 type DataCardProps = {
@@ -34,10 +35,15 @@ type CheckItemProps = {
 interface LavageWizardProps {
   initialPhase?: 1 | 2;
   onPhaseChange?: (phase: 1 | 2) => void;
+  onValidated?: (isValid: boolean) => void;
 }
 
-export function LavageWizard({ initialPhase = 1, onPhaseChange }: LavageWizardProps) {
+export function LavageWizard({ initialPhase = 1, onPhaseChange, onValidated }: LavageWizardProps) {
   const [phase, setPhase] = useState<1 | 2>(initialPhase); // 1: Chargement (Entrée), 2: Déchargement (Sortie)
+
+  useEffect(() => {
+    setPhase(initialPhase);
+  }, [initialPhase]);
 
   const handlePhaseChange = (newPhase: 1 | 2) => {
     setPhase(newPhase);
@@ -77,6 +83,10 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange }: LavageWizardPr
 
   const isPhase1Complete = panierScanned && laveurScanned && operatorConfirmed && laveurStatus === "ready";
   const isPhase2Complete = sortieCycleValidated && sortiePanierScanned && sortieOperatorConfirmed;
+
+  useEffect(() => {
+    onValidated?.(phase === 1 ? isPhase1Complete : isPhase2Complete);
+  }, [phase, isPhase1Complete, isPhase2Complete, onValidated]);
   const quickActionLabel =
     phase === 1
       ? !panierScanned
@@ -184,7 +194,7 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange }: LavageWizardPr
 
         {phase === 2 && (
           <>
-            <DashboardSection index="01" title="Conformité" scanned={sortieCycleValidated} icon="📋" waitingText="Vérification">
+            <DashboardSection index="01" title="Conformité" scanned={sortieCycleValidated} icon="📋" waitingText="Vérification" forceShow>
               <div className="flex flex-col h-full space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
                   <CheckItem label="Programme" checked={conformity.programme} onClick={() => setConformity({...conformity, programme: !conformity.programme})} />
@@ -218,42 +228,21 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange }: LavageWizardPr
         )}
       </div>
 
-      <footer className="shrink-0 flex items-center justify-center bg-white/80 backdrop-blur-md p-3 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto">
-        {phase === 1 ? (
-          <button 
-            onClick={() => { alert('Cycle Lavage Lancé !'); handlePhaseChange(2); }}
-            disabled={!isPhase1Complete}
-            className={`group relative rounded-xl px-12 py-3.5 text-[10px] font-semibold uppercase tracking-[0.22em] transition-all duration-300 shadow-md ${isPhase1Complete ? 'bg-[#1378ac] text-white hover:bg-[#0f6a98]' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
-          >
-            {isPhase1Complete && <span className="absolute -top-1.5 -right-1.5 rounded-full bg-[#11b5a2] p-1.5 text-[8px] text-white shadow-lg">✓</span>}
-            Lancer le Cycle
-          </button>
-        ) : (
-          <button 
-            onClick={() => alert('Cycle Lavage Terminé et Libéré !')}
-            disabled={!isPhase2Complete}
-            className={`group relative rounded-xl px-12 py-3.5 text-[10px] font-semibold uppercase tracking-[0.22em] transition-all duration-300 shadow-md ${isPhase2Complete ? 'bg-[#11b5a2] text-white hover:bg-[#0fa391]' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
-          >
-            {isPhase2Complete && <span className="absolute -top-1.5 -right-1.5 rounded-full bg-white p-1.5 text-[8px] font-semibold text-[#11b5a2] shadow-lg">✓</span>}
-            Libérer la Charge
-          </button>
-        )}
-
-        {quickActionLabel && (
-          <button
-            onClick={triggerSimulation}
-            className={`absolute right-6 flex items-center gap-2 rounded-full px-6 py-3.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-white shadow-md transition-all group ${phase === 1 ? 'bg-[#0b4867]' : 'bg-[#11b5a2]'}`}
-          >
-            <span className="text-lg text-white/85">⌁</span>
-            <span>{quickActionLabel}</span>
-          </button>
-        )}
-      </footer>
+      {/* Simulation Floating Button */}
+      {quickActionLabel && (
+        <button
+          onClick={triggerSimulation}
+          className="fixed bottom-32 right-10 flex items-center gap-3 rounded-full bg-[#0b4867] px-6 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-2xl transition-all hover:bg-[#0a3952] hover:scale-105 active:scale-95 group z-[40]"
+        >
+          <span className="text-xl text-[#8de7da] animate-pulse">⌁</span>
+          <span>{quickActionLabel}</span>
+        </button>
+      )}
     </div>
   );
 }
 
-function DashboardSection({ index, title, scanned, icon, waitingText, children }: DashboardSectionProps) {
+function DashboardSection({ index, title, scanned, icon, waitingText, children, forceShow }: DashboardSectionProps) {
   return (
     <section className={`bg-white/95 p-5 rounded-3xl border shadow-sm transition-all duration-500 flex flex-col overflow-hidden ${scanned ? 'border-[#11b5a2] ring-4 ring-[#eafaf7]' : 'border-[#d5e2ea]'}`}>
       <div className="mb-4 flex items-center justify-between shrink-0">
@@ -264,7 +253,7 @@ function DashboardSection({ index, title, scanned, icon, waitingText, children }
         {scanned && <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-2 py-0.5 text-[8px] font-semibold uppercase text-[#0b786e]">Validé</span>}
       </div>
       
-      {!scanned ? (
+      {!scanned && !forceShow ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] text-slate-400 p-4">
           <div className="text-3xl opacity-50">{icon}</div>
           <p className="font-bold text-[9px] uppercase tracking-[0.2em] text-center">{waitingText}</p>

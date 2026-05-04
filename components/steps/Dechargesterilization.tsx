@@ -20,9 +20,10 @@ interface CycleData {
 
 interface DechargesterilizationProps {
   onPhaseChange?: (phase: 1 | 2) => void;
+  onValidated?: (isValid: boolean) => void;
 }
 
-export function Dechargesterilization({ onPhaseChange }: DechargesterilizationProps) {
+export function Dechargesterilization({ onPhaseChange, onValidated }: DechargesterilizationProps) {
   const [scannedItems, setScannedItems] = useState<string[]>([]);
   const [agentBadge, setAgentBadge] = useState({ name: "", role: "" });
   const [checks, setChecks] = useState<ConformityChecks>({
@@ -100,6 +101,10 @@ export function Dechargesterilization({ onPhaseChange }: DechargesterilizationPr
 
   const allChecksValid = checks.passage && checks.physico && checks.siccite && checks.integrite && checks.graphValidated && checks.graphConformity;
   const isCycleValidated = agentBadge.name !== "" && scannedItems.length > 0 && allChecksValid;
+
+  useEffect(() => {
+    onValidated?.(isCycleValidated);
+  }, [isCycleValidated, onValidated]);
 
   // Simulation helpers
   const simulateCheckAll = () => setChecks({ 
@@ -221,8 +226,8 @@ export function Dechargesterilization({ onPhaseChange }: DechargesterilizationPr
   return (
     <div className="h-full flex flex-col gap-4 text-slate-900 overflow-hidden font-app relative">
       
-      {/* Simulation Floating Buttons */}
-      <div className="fixed bottom-24 right-10 flex flex-col gap-3 z-50">
+      {/* Simulation Floating Buttons - moved to fixed non-obstructive positions */}
+      <div className="fixed bottom-32 right-10 flex flex-col gap-3 z-50">
         <button onClick={simulateCheckAll} className="bg-white border-2 border-[#1378ac] text-[#1378ac] p-4 rounded-2xl shadow-xl hover:scale-105 transition-all w-20 flex flex-col items-center">
           <span className="text-xl">📊</span>
           <span className="text-[8px] font-black uppercase mt-1 text-center">Check OK</span>
@@ -408,23 +413,6 @@ export function Dechargesterilization({ onPhaseChange }: DechargesterilizationPr
         </div>
       </div>
 
-      {/* FOOTER ACTION BAR */}
-      <footer className="shrink-0 flex items-center justify-center bg-white/95 backdrop-blur-md p-4 rounded-[2.5rem] border border-[#d5e2ea] mt-2 shadow-[0_-10px_40px_rgba(11,72,103,0.03)] z-30">
-        <button 
-          disabled={!isCycleValidated}
-          onClick={() => alert("LIBÉRATION TERMINÉE !")}
-          className={`group px-32 py-5 rounded-[2.5rem] font-black uppercase text-[12px] tracking-[0.4em] shadow-2xl transition-all duration-500 ${
-            isCycleValidated
-            ? "bg-[#11b5a2] text-white hover:bg-[#0fa391] hover:scale-105 active:scale-95 shadow-[0_25px_50px_rgba(17,181,162,0.25)]" 
-            : "bg-slate-200 text-slate-400 cursor-not-allowed grayscale opacity-60"
-          }`}
-        >
-          <div className="flex items-center gap-4">
-            <span className="text-2xl">{isCycleValidated ? "🛡️" : "🔒"}</span>
-            <span>Libérer la charge</span>
-          </div>
-        </button>
-      </footer>
     </div>
   );
 }
