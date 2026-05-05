@@ -1,0 +1,12 @@
+{
+  "lavage-chargement": {
+    "moduleKey": "lavage-chargement",
+    "note": "",
+    "updatedAt": "2026-04-15T13:39:37.139Z"
+  },
+  "sterilization-reception": {
+    "moduleKey": "sterilization-reception",
+    "note": "",
+    "updatedAt": "2026-05-04T10:55:25.611Z"
+  }
+}

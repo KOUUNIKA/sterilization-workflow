@@ -5,11 +5,14 @@ import { BrowserRouter, Routes, Route, Navigate, Link } from "react-router-dom";
 import { Layout } from "./layout/Layout";
 import { Login } from "./Login";
 import { InventoryManagement } from "./InventoryManagement";
+import { HistoryView } from "./HistoryView";
 import { EquipmentQualification } from "./EquipmentQualification";
+import { SterilizationReception } from "./SterilizationReception";
 import { PredesinfectionWizard } from "./steps/PredesinfectionWizard";
 import { LavageWizard } from "./steps/Lavage";
 import { Recomposition } from "./steps/Recomposition";
 import { SterilizationWizard } from "./steps/Sterilization";
+import { Dechargesterilization } from "./steps/Dechargesterilization";
 import { StorageDistribution } from "./steps/StorageDistribution";
 import { PatientLiaison } from "./PatientLiaison";
 import { 
@@ -26,6 +29,13 @@ import {
 
 // Mock Dashboard Component
 function Dashboard() {
+  const [autoclaveStatus, setAutoclaveStatus] = useState<string>("Pending Tests");
+
+  useEffect(() => {
+    const status = localStorage.getItem('autoclave_status');
+    if (status) setAutoclaveStatus(status);
+  }, []);
+
   return (
     <div className="h-full flex flex-col overflow-hidden text-slate-900">
       <div className="flex-1 flex flex-col items-center justify-center min-h-0">
@@ -43,10 +53,19 @@ function Dashboard() {
           </div>
 
           <div className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 justify-center items-stretch pb-10">
-            <Link to="/qualification" className="flex">
+            <Link to="/qualification" className="flex flex-col gap-2">
+              <div className="flex items-center justify-between px-4 py-1.5 bg-white rounded-t-[1.5rem] border-x border-t border-[#d5e2ea] -mb-2 z-10 mx-6 shadow-sm">
+                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Autoclave Status</span>
+                <div className="flex items-center gap-1.5">
+                  <div className={`h-1.5 w-1.5 rounded-full ${autoclaveStatus === 'Qualified' ? 'bg-[#11b5a2]' : (autoclaveStatus === 'Critical' ? 'bg-red-500 animate-pulse' : 'bg-orange-400')}`} />
+                  <span className={`text-[9px] font-black uppercase tracking-tight ${autoclaveStatus === 'Qualified' ? 'text-[#0b786e]' : (autoclaveStatus === 'Critical' ? 'text-red-600' : 'text-orange-600')}`}>
+                    {autoclaveStatus}
+                  </span>
+                </div>
+              </div>
               <DashboardCard
                 step="00"
-                title="Qualification"
+                title="Tests de contrôle"
                 desc="Test Bowie-Dick quotidien et validation de l'équipement (Sécurité)."
                 accent="border-[#0b4867]/20 bg-[#edf5f9] text-[#0b4867]"
               />
@@ -61,10 +80,19 @@ function Dashboard() {
               />
             </Link>
 
-            <Link to="/lavage" className="flex">
+            <Link to="/sterilization-reception" className="flex">
               <DashboardCard
                 step="02"
-                title="Lavage"
+                title="Réception"
+                desc="Origine, sécurité transport et validation physique à l'arrivée (Zone Sale)."
+                accent="border-[#11b5a2]/35 bg-[#eafaf7] text-[#0b786e]"
+              />
+            </Link>
+
+            <Link to="/lavage-chargement" className="flex">
+              <DashboardCard
+                step="03"
+                title="Nettoyage"
                 desc="Entrée machine, conformité cycle et libération (Zone Sale/Propre)."
                 accent="border-[#1378ac]/25 bg-[#e8f4fb] text-[#1378ac]"
               />
@@ -72,16 +100,16 @@ function Dashboard() {
 
             <Link to="/recomposition" className="flex">
               <DashboardCard
-                step="03"
-                title="Recomposition"
+                step="04"
+                title="Conditionnement"
                 desc="Contrôle instruments, AI Vision et étiquetage (Zone Propre)."
                 accent="border-[#0b4867]/20 bg-[#edf5f9] text-[#0b4867]"
               />
             </Link>
 
-            <Link to="/sterilization" className="flex">
+            <Link to="/sterilization-chargement" className="flex">
               <DashboardCard
-                step="04"
+                step="05"
                 title="Stérilisation"
                 desc="Chargement autoclave et validation sortie (Zone Propre/Stérile)."
                 accent="border-[#11b5a2]/30 bg-[#f2fbfa] text-[#11b5a2]"
@@ -90,7 +118,7 @@ function Dashboard() {
 
             <Link to="/storage-distribution" className="flex">
               <DashboardCard
-                step="05"
+                step="06"
                 title="Stockage & Distribution"
                 desc="Arsenal, affectation bloc et traçabilité (Zone Stérile)."
                 accent="border-[#1378ac]/20 bg-[#edf5f9] text-[#0b4867]"
@@ -99,7 +127,7 @@ function Dashboard() {
 
             <Link to="/patient-liaison" className="flex">
               <DashboardCard
-                step="06"
+                step="07"
                 title="Liaison Patient"
                 desc="Lier le matériel utilisé au dossier patient (Post-Opératoire)."
                 accent="border-[#11b5a2]/35 bg-[#eafaf7] text-[#0b786e]"
@@ -108,7 +136,7 @@ function Dashboard() {
 
             <Link to="/inventory" className="flex">
               <DashboardCard
-                step="07"
+                step="08"
                 title="Inventaire & Config"
                 desc="Gestion du référentiel : boîtes, instruments et emballages."
                 accent="border-[#0b4867]/20 bg-[#edf5f9] text-[#0b4867]"
@@ -159,11 +187,15 @@ export function AppContent() {
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/inventory" element={<InventoryManagement />} />
+          <Route path="/history" element={<HistoryView />} />
           <Route path="/qualification" element={<EquipmentQualification onValidated={() => {}} />} />
           <Route path="/predesinfection" element={<PredesinfectionWizard cycleId="2026-0001" onValidated={() => {}} />} />
-          <Route path="/lavage" element={<LavageWizard initialPhase={1} onPhaseChange={() => {}} onValidated={() => {}} />} />
+          <Route path="/sterilization-reception" element={<SterilizationReception />} />
+          <Route path="/lavage-chargement" element={<LavageWizard initialPhase={1} onPhaseChange={() => {}} onValidated={() => {}} />} />
+          <Route path="/lavage-sortie" element={<LavageWizard initialPhase={2} onPhaseChange={() => {}} onValidated={() => {}} />} />
           <Route path="/recomposition" element={<Recomposition onValidated={() => {}} />} />
-          <Route path="/sterilization" element={<SterilizationWizard initialPhase={1} onPhaseChange={() => {}} onValidated={() => {}} />} />
+          <Route path="/sterilization-chargement" element={<SterilizationWizard initialPhase={1} onPhaseChange={() => {}} onValidated={() => {}} />} />
+          <Route path="/sterilization-sortie" element={<Dechargesterilization onValidated={() => {}} />} />
           <Route path="/storage-distribution" element={<StorageDistribution onValidated={() => {}} />} />
           <Route path="/patient-liaison" element={<PatientLiaison />} />
           <Route path="/maintenance" element={<div className="bg-white p-10 rounded-3xl border border-[#d5e2ea] shadow-sm"><h2 className="text-2xl font-bold text-[#0b4867]">Gestion de Maintenance</h2><p className="mt-4 text-slate-500">Interface de maintenance en attente de configuration.</p></div>} />

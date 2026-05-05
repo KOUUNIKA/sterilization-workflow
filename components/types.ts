@@ -11,9 +11,12 @@ export type WorkflowZone =
 export type ModuleType = 
   | "qualification" 
   | "predesinfection" 
-  | "lavage" 
+  | "sterilization-reception"
+  | "lavage-chargement" 
+  | "lavage-sortie" 
   | "recomposition" 
-  | "sterilization" 
+  | "sterilization-chargement" 
+  | "sterilization-sortie" 
   | "storage-distribution" 
   | "patient-liaison" 
   | "inventory" 
@@ -24,19 +27,25 @@ export type ModuleType =
 export const WORKFLOW_SEQUENCE: ModuleType[] = [
   "qualification",
   "predesinfection",
-  "lavage",
+  "sterilization-reception",
+  "lavage-chargement",
+  "lavage-sortie",
   "recomposition",
-  "sterilization",
+  "sterilization-chargement",
+  "sterilization-sortie",
   "storage-distribution",
   "patient-liaison"
 ];
 
 export const MODULE_LABELS: Record<string, string> = {
-  "qualification": "Qualification",
+  "qualification": "Tests de contrôle",
   "predesinfection": "Prédésinfection",
-  "lavage": "Lavage",
-  "recomposition": "Recomposition",
-  "sterilization": "Stérilisation",
+  "sterilization-reception": "Réception",
+  "lavage-chargement": "Nettoyage (Entrée)",
+  "lavage-sortie": "Nettoyage (Sortie)",
+  "recomposition": "Conditionnement",
+  "sterilization-chargement": "Stérilisation (Entrée)",
+  "sterilization-sortie": "Stérilisation (Sortie)",
   "storage-distribution": "Stockage & Distribution",
   "patient-liaison": "Liaison Patient",
 };
@@ -44,9 +53,12 @@ export const MODULE_LABELS: Record<string, string> = {
 export const MODULE_ZONES: Record<string, WorkflowZone> = {
   "qualification": "dashboard",
   "predesinfection": "zone-sale",
-  "lavage": "zone-sale",
+  "sterilization-reception": "zone-sale",
+  "lavage-chargement": "zone-sale",
+  "lavage-sortie": "zone-propre",
   "recomposition": "zone-propre",
-  "sterilization": "zone-propre",
+  "sterilization-chargement": "zone-propre",
+  "sterilization-sortie": "zone-sterile",
   "storage-distribution": "zone-sterile",
   "patient-liaison": "liaison",
 };

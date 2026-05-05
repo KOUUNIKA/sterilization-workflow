@@ -5,6 +5,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { Topbar } from "./Topbar";
 import { WorkflowFooter } from "./WorkflowFooter";
 import { WORKFLOW_SEQUENCE } from "../types";
+import { WorkflowNotesPanel } from "./WorkflowNotesPanel";
 
 export function Layout() {
   const location = useLocation();
@@ -17,6 +18,7 @@ export function Layout() {
         <Topbar />
         <main className={`flex-1 overflow-hidden relative flex flex-col p-6 transition-all duration-500 ${isWorkflow ? 'pb-[120px]' : ''}`}>
           <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
+            {isWorkflow ? <WorkflowNotesPanel moduleKey={currentPath} /> : null}
             <Outlet />
           </div>
           

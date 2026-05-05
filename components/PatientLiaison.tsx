@@ -1,6 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { 
+  Pencil, 
+  RotateCcw, 
+  Trash2, 
+  UserMinus, 
+  AlertCircle, 
+  ChevronLeft,
+  CheckCircle2,
+  X
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 interface ScannedItem {
   id: string;
@@ -9,10 +20,20 @@ interface ScannedItem {
 }
 
 export function PatientLiaison() {
+  const navigate = useNavigate();
   const [patientScanned, setPatientScanned] = useState(false);
   const [patientData, setPatientData] = useState<{ id: string; name: string } | null>(null);
   const [scannedBoxes, setScannedBoxes] = useState<ScannedItem[]>([]);
   const [nurseConfirmed, setNurseConfirmed] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const handleGlobalReset = () => {
+    setPatientScanned(false);
+    setPatientData(null);
+    setScannedBoxes([]);
+    setNurseConfirmed(false);
+    setShowResetConfirm(false);
+  };
 
   const simulatePatientScan = () => {
     setPatientScanned(true);
@@ -39,9 +60,20 @@ export function PatientLiaison() {
       {/* Top Section */}
       <div className="grid gap-4 lg:grid-cols-2 shrink-0">
         <section className={`bg-white/95 p-5 rounded-3xl border transition-all shadow-sm ${patientScanned ? 'border-[#11b5a2] ring-4 ring-[#eafaf7]' : 'border-[#d5e2ea]'}`}>
-          <div className="flex items-center gap-3 mb-4">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1378ac] text-xs font-bold text-white shadow-md">01</span>
-            <h2 className="text-base font-bold tracking-tight text-[#0b4867]">Identification Patient</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1378ac] text-xs font-bold text-white shadow-md">01</span>
+              <h2 className="text-base font-bold tracking-tight text-[#0b4867]">Identification Patient</h2>
+            </div>
+            {patientScanned && (
+              <button 
+                onClick={() => { setPatientScanned(false); setPatientData(null); }}
+                className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-slate-400 hover:text-[#1378ac] hover:border-[#1378ac] transition-colors"
+              >
+                <Pencil className="w-2.5 h-2.5" />
+                Modifier
+              </button>
+            )}
           </div>
 
           {!patientScanned ? (
@@ -64,9 +96,20 @@ export function PatientLiaison() {
         </section>
 
         <section className={`bg-white/95 p-5 rounded-3xl border transition-all shadow-sm ${nurseConfirmed ? 'border-[#11b5a2] ring-4 ring-[#eafaf7]' : 'border-[#d5e2ea]'}`}>
-          <div className="flex items-center gap-3 mb-4">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0b4867] text-xs font-bold text-white shadow-md">03</span>
-            <h2 className="text-base font-bold tracking-tight text-[#0b4867]">Infirmier(ère)</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0b4867] text-xs font-bold text-white shadow-md">03</span>
+              <h2 className="text-base font-bold tracking-tight text-[#0b4867]">Infirmier(ère)</h2>
+            </div>
+            {nurseConfirmed && (
+              <button 
+                onClick={() => setNurseConfirmed(false)}
+                className="flex items-center gap-1 text-[7px] font-black uppercase tracking-wider text-slate-400 hover:text-[#1378ac] transition-colors"
+              >
+                <UserMinus className="w-2.5 h-2.5" />
+                Changer
+              </button>
+            )}
           </div>
 
           {!nurseConfirmed ? (
@@ -97,11 +140,22 @@ export function PatientLiaison() {
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1378ac] text-xs font-bold text-white shadow-md">02</span>
             <h2 className="text-base font-bold tracking-tight text-[#0b4867]">Liaison Matériel</h2>
           </div>
-          {scannedBoxes.length > 0 && (
-            <span className="bg-[#11b5a2] text-white px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest shadow-sm">
-              {scannedBoxes.length} lié(s)
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            {scannedBoxes.length > 0 && (
+              <button 
+                onClick={() => setScannedBoxes([])}
+                className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-slate-400 hover:text-[#1378ac] hover:border-[#1378ac] transition-colors"
+              >
+                <RotateCcw className="w-2.5 h-2.5" />
+                Réinitialiser
+              </button>
+            )}
+            {scannedBoxes.length > 0 && (
+              <span className="bg-[#11b5a2] text-white px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest shadow-sm">
+                {scannedBoxes.length} lié(s)
+              </span>
+            )}
+          </div>
         </div>
 
         {!patientScanned ? (
@@ -117,13 +171,19 @@ export function PatientLiaison() {
           <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 min-h-0">
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               {scannedBoxes.map((box, index) => (
-                <div key={index} className="flex items-center gap-3 p-3 rounded-xl border border-[#b8cad6] bg-white shadow-sm hover:border-[#1378ac] transition-all">
+                <div key={index} className="group relative flex items-center gap-3 p-3 rounded-xl border border-[#b8cad6] bg-white shadow-sm hover:border-[#1378ac] transition-all">
                   <div className="h-10 w-10 rounded-lg bg-[#edf5f9] flex items-center justify-center text-lg">🏷️</div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-bold text-[#0b4867] truncate">{box.id}</p>
                     <p className="text-[8px] font-medium text-slate-400 truncate">{box.label}</p>
                   </div>
-                  <span className="text-[7px] font-bold text-slate-300 shrink-0">{box.time}</span>
+                  <span className="text-[7px] font-bold text-slate-300 shrink-0 group-hover:opacity-0 transition-opacity">{box.time}</span>
+                  <button 
+                    onClick={() => setScannedBoxes(prev => prev.filter((_, i) => i !== index))}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-lg bg-red-50 text-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
                 </div>
               ))}
             </div>
@@ -132,22 +192,70 @@ export function PatientLiaison() {
       </section>
 
       {/* Footer Section */}
-      <footer className="shrink-0 flex items-center justify-center bg-white/80 backdrop-blur-md p-3 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto">
+      <footer className="shrink-0 flex items-center justify-between bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto gap-4">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-slate-50 hover:text-slate-600 active:scale-95"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Étape précédente
+          </button>
+          
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-red-50 hover:text-red-500 hover:border-red-100 active:scale-95"
+          >
+            <RotateCcw className="w-4 h-4" />
+            Tout effacer
+          </button>
+        </div>
+
         <button 
           onClick={() => alert("Liaison Patient Validée !")}
           disabled={!isComplete}
-          className={`group relative rounded-xl px-12 py-3.5 text-[10px] font-bold uppercase tracking-[0.25em] transition-all duration-300 shadow-md ${isComplete ? 'bg-[#1378ac] text-white hover:bg-[#0f6a98]' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+          className={`group relative flex items-center gap-3 rounded-xl px-12 py-3.5 text-[11px] font-black uppercase tracking-[0.22em] transition-all duration-300 shadow-xl ${isComplete ? 'bg-[#1378ac] text-white hover:bg-[#0f6a98] hover:-translate-y-0.5 active:scale-95 shadow-[#1378ac]/20' : 'bg-slate-100 text-slate-300 cursor-not-allowed border border-slate-200 shadow-none'}`}
         >
-          {isComplete && <span className="absolute -top-1.5 -right-1.5 rounded-full bg-[#11b5a2] p-1 text-[8px] text-white shadow-lg animate-bounce">✓</span>}
+          {isComplete && <CheckCircle2 className="w-4 h-4 text-white" />}
           Valider liaison
         </button>
 
-        <div className="absolute right-6 flex gap-2">
+        <div className="flex gap-2">
           <SimBtn icon="👤" label="Patient" onClick={simulatePatientScan} active={patientScanned} />
           <SimBtn icon="🏷️" label="Box" onClick={simulateBoxScan} active={patientScanned} />
           <SimBtn icon="🪪" label="Badge" onClick={simulateNurseScan} active={nurseConfirmed} />
         </div>
       </footer>
+
+      {/* GLOBAL RESET CONFIRMATION MODAL */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowResetConfirm(false)} />
+          <div className="relative bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-300">
+            <div className="h-16 w-16 rounded-2xl bg-red-50 flex items-center justify-center text-red-500 mb-6 mx-auto">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-slate-900 text-center uppercase tracking-tight mb-2">Tout effacer ?</h3>
+            <p className="text-sm font-bold text-slate-500 text-center leading-relaxed mb-8">
+              Êtes-vous sûr de vouloir effacer toutes les données de liaison patient pour ce cycle ?
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all active:scale-95"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleGlobalReset}
+                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-200 transition-all active:scale-95"
+              >
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

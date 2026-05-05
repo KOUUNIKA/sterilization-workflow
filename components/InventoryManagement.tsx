@@ -20,14 +20,20 @@ import {
   Eye,
   Edit2,
   FileText,
-  Calendar
+  Calendar,
+  RotateCcw,
+  Trash2,
+  ChevronLeft,
+  AlertCircle
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 type TabType = "boxes" | "instruments" | "packaging";
 type ModeType = "referentiel" | "inventaire";
 type InstrumentStatus = "En Stock" | "Utilisé" | "Sale" | "En Maintenance";
 
 export function InventoryManagement() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>("boxes");
   const [mode, setMode] = useState<ModeType>("referentiel");
   const [searchQuery, setSearchQuery] = useState("");
@@ -44,6 +50,56 @@ export function InventoryManagement() {
   const [isBoxDetailsModalOpen, setIsBoxDetailsModalOpen] = useState(false);
   const [isInstrumentDetailsModalOpen, setIsInstrumentDetailsModalOpen] = useState(false);
   const [selectedCatalogueInstrument, setSelectedCatalogueInstrument] = useState<any>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // --- NEW STATES FOR CATALOGUE EDIT/DELETE ---
+  const [catalogBoxes, setCatalogBoxes] = useState(referentielBoxes);
+  const [catalogInstruments, setCatalogInstruments] = useState(referentielInstruments);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [itemToEdit, setItemToEdit] = useState<any>(null);
+  const [itemToDelete, setItemToDelete] = useState<any>(null);
+
+  const handleGlobalReset = () => {
+    setSearchQuery("");
+    setSelectedBox(null);
+    setSelectedInstrument(null);
+    setSelectedSpecialty("Toutes");
+    setSelectedRows([]);
+    setIsConfigMode(false);
+    setShowResetConfirm(false);
+  };
+
+  const handleEditItem = (item: any) => {
+    setItemToEdit(item);
+    setIsEditModalOpen(true);
+  };
+
+  const handleDeleteClick = (item: any) => {
+    setItemToDelete(item);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (activeTab === 'boxes') {
+      setCatalogBoxes(prev => prev.filter(b => b.id !== itemToDelete.id));
+    } else {
+      setCatalogInstruments(prev => prev.filter(i => i.id !== itemToDelete.id));
+    }
+    setIsDeleteConfirmOpen(false);
+    setItemToDelete(null);
+    setIsEditModalOpen(false); // If opened from edit modal
+  };
+
+  const saveEdit = (updatedItem: any) => {
+    if (activeTab === 'boxes') {
+      setCatalogBoxes(prev => prev.map(b => b.id === updatedItem.id ? updatedItem : b));
+    } else {
+      setCatalogInstruments(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
+    }
+    setIsEditModalOpen(false);
+    setItemToEdit(null);
+  };
 
   const filteredInventaireBoxes = useMemo(() => {
     return inventaireBoxes.filter(box => {
@@ -53,13 +109,27 @@ export function InventoryManagement() {
     });
   }, [searchQuery, selectedSpecialty]);
 
+  const filteredCatalogBoxes = useMemo(() => {
+    return catalogBoxes.filter(box => {
+      const matchesSearch = box.ref.toLowerCase().includes(searchQuery.toLowerCase()) || box.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSpecialty = selectedSpecialty === "Toutes" || box.category === selectedSpecialty;
+      return matchesSearch && matchesSpecialty;
+    });
+  }, [searchQuery, selectedSpecialty, catalogBoxes]);
+
   const filteredInventaireInstruments = useMemo(() => {
     return inventaireInstruments.filter(inst => {
       const matchesSearch = inst.id.toLowerCase().includes(searchQuery.toLowerCase()) || inst.name.toLowerCase().includes(searchQuery.toLowerCase());
-      // Instruments don't directly have specialty in mock data but we could add it if needed
       return matchesSearch;
     });
   }, [searchQuery]);
+
+  const filteredCatalogInstruments = useMemo(() => {
+    return catalogInstruments.filter(inst => {
+      const matchesSearch = inst.ref.toLowerCase().includes(searchQuery.toLowerCase()) || inst.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesSearch;
+    });
+  }, [searchQuery, catalogInstruments]);
 
   const handleScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -181,8 +251,8 @@ export function InventoryManagement() {
                 </div>
               </div>
               
-              <div className="flex bg-slate-50 border-2 border-[#d5e2ea] rounded-2xl items-center px-4 py-2 w-96 transition-all focus-within:border-[#11b5a2] focus-within:bg-white ml-4">
-                <Search className="w-4 h-4 text-slate-400 mr-2" />
+              <div className="flex bg-slate-50 border-2 border-[#d5e2ea] rounded-2xl items-center px-4 py-2 w-96 transition-all focus-within:border-[#11b5a2] focus-within:bg-white ml-4 group">
+                <Search className="w-4 h-4 text-slate-400 mr-2 group-focus-within:text-[#11b5a2] transition-colors" />
                 <input 
                   type="text" 
                   placeholder={activeTab === 'boxes' ? "Scanner code-barres ou rechercher..." : "Scanner instrument..."}
@@ -191,6 +261,14 @@ export function InventoryManagement() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={handleScan}
                 />
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery("")}
+                    className="ml-2 text-slate-300 hover:text-slate-500 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -482,13 +560,13 @@ export function InventoryManagement() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {(selectedSpecialty === "Toutes" ? referentielBoxes : referentielBoxes.filter(b => b.category === selectedSpecialty)).map((box) => (
+                        {filteredCatalogBoxes.map((box) => (
                           <tr 
                             key={box.id} 
                             onClick={() => { setDatasheetBox(box); setIsDatasheetModalOpen(true); }}
                             className={`hover:bg-slate-50 cursor-pointer transition-all ${selectedBox?.id === box.id ? 'bg-[#f0f9ff]' : 'odd:bg-white even:bg-[#fbfcfd]'}`}
                           >
-                            <td className="px-6 py-4">
+                            <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                               <input 
                                 type="checkbox" 
                                 className="w-4 h-4 rounded border-[#d5e2ea] text-[#11b5a2] focus:ring-[#11b5a2]" 
@@ -527,9 +605,13 @@ export function InventoryManagement() {
                                 24/03/2026
                               </div>
                             </td>
-                            <td className="px-6 py-4 text-right">
+                            <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1">
-                                <button className="p-2 hover:bg-[#edf5f9] rounded-lg transition-all text-slate-400 hover:text-[#1378ac] group" title="Éditer">
+                                <button 
+                                  onClick={() => handleEditItem(box)}
+                                  className="p-2 hover:bg-[#edf5f9] rounded-lg transition-all text-slate-400 hover:text-[#1378ac] group" 
+                                  title="Éditer"
+                                >
                                   <Edit2 className="w-4 h-4" />
                                 </button>
                                 <button className="p-2 hover:bg-[#edf5f9] rounded-lg transition-all text-slate-400 hover:text-[#1378ac] group" title="Imprimer">
@@ -564,13 +646,13 @@ export function InventoryManagement() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {referentielInstruments.map((inst) => (
+                        {filteredCatalogInstruments.map((inst) => (
                           <tr 
                             key={inst.id} 
                             onClick={() => { setSelectedCatalogueInstrument(inst); setIsInstrumentDetailsModalOpen(true); }}
                             className="hover:bg-slate-50 transition-all odd:bg-white even:bg-[#fbfcfd] cursor-pointer"
                           >
-                            <td className="px-6 py-4">
+                            <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                               <input type="checkbox" className="w-4 h-4 rounded border-[#d5e2ea] text-[#11b5a2] focus:ring-[#11b5a2]" />
                             </td>
                             <td className="px-6 py-4">
@@ -590,12 +672,18 @@ export function InventoryManagement() {
                             <td className="px-6 py-4">
                               <span className="text-[10px] font-bold text-slate-600">{inst.material}</span>
                             </td>
-                            <td className="px-6 py-4 text-right">
+                            <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1">
-                                <button className="p-2 hover:bg-[#edf5f9] rounded-lg transition-all text-slate-400 hover:text-[#1378ac]"><Edit2 className="w-4 h-4" /></button>
+                                <button 
+                                  onClick={() => handleEditItem(inst)}
+                                  className="p-2 hover:bg-[#edf5f9] rounded-lg transition-all text-slate-400 hover:text-[#1378ac] group"
+                                  title="Éditer"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
                                 <button className="p-2 hover:bg-[#edf5f9] rounded-lg transition-all text-slate-400 hover:text-[#1378ac]"><Printer className="w-4 h-4" /></button>
                                 <button 
-                                  onClick={(e) => { e.stopPropagation(); setSelectedCatalogueInstrument(inst); setIsInstrumentDetailsModalOpen(true); }}
+                                  onClick={() => { setSelectedCatalogueInstrument(inst); setIsInstrumentDetailsModalOpen(true); }}
                                   className="p-2 hover:bg-[#eafaf7] rounded-lg transition-all text-slate-400 hover:text-[#11b5a2]"
                                 >
                                   <Eye className="w-4 h-4" />
@@ -1082,16 +1170,161 @@ export function InventoryManagement() {
         </div>
       )}
 
-      {/* Bottom Navigation Arrow */}
-      <button 
-        onClick={() => {
-          if (mode === 'referentiel') setMode('inventaire');
-          else alert("Redirection vers le module de Stérilisation...");
-        }}
-        className="fixed bottom-12 right-12 h-16 w-16 rounded-[24px] bg-[#1378ac] text-white flex items-center justify-center shadow-2xl hover:bg-[#0b4867] hover:scale-110 active:scale-95 transition-all z-50 group border-4 border-white/50 backdrop-blur-sm"
-      >
-        <ArrowRight className="w-8 h-8 group-hover:translate-x-1.5 transition-transform" />
-      </button>
+      {/* Bottom Navigation & Reset Footer */}
+      <footer className="fixed bottom-8 left-1/2 -translate-x-1/2 w-fit bg-white/80 backdrop-blur-md p-3 rounded-2xl border border-[#d5e2ea] shadow-2xl z-50 flex items-center gap-4 animate-in slide-in-from-bottom-8 duration-500">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-slate-50 hover:text-slate-600 active:scale-95"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Retour
+        </button>
+        
+        <button
+          onClick={() => setShowResetConfirm(true)}
+          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-red-50 hover:text-red-500 hover:border-red-100 active:scale-95"
+        >
+          <RotateCcw className="w-4 h-4" />
+          Réinitialiser vue
+        </button>
+
+        <div className="h-8 w-px bg-slate-200 mx-2" />
+
+        <button 
+          onClick={() => {
+            if (mode === 'referentiel') setMode('inventaire');
+            else navigate("/");
+          }}
+          className="flex items-center gap-3 bg-[#1378ac] text-white px-8 py-3 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-[#1378ac]/20 hover:bg-[#0b4867] hover:-translate-y-0.5 active:scale-95 transition-all group"
+        >
+          {mode === 'referentiel' ? 'Vers Inventaires' : 'Menu Principal'}
+          <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+        </button>
+      </footer>
+
+      {/* GLOBAL RESET CONFIRMATION MODAL */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowResetConfirm(false)} />
+          <div className="relative bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-300">
+            <div className="h-16 w-16 rounded-2xl bg-red-50 flex items-center justify-center text-red-500 mb-6 mx-auto">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-slate-900 text-center uppercase tracking-tight mb-2">Réinitialiser ?</h3>
+            <p className="text-sm font-bold text-slate-500 text-center leading-relaxed mb-8">
+              Effacer la recherche, les filtres et les sélections actuelles ?
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all active:scale-95"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleGlobalReset}
+                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-200 transition-all active:scale-95"
+              >
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CATALOGUE EDIT MODAL */}
+      {isEditModalOpen && itemToEdit && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-[#0b4867]/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300 border border-white/20">
+            <div className="bg-[#1378ac] p-8 text-white flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-tight leading-none">Modifier {activeTab === 'boxes' ? 'la Boîte' : 'l\'Instrument'}</h3>
+                <p className="text-white/70 text-[10px] font-black uppercase tracking-[0.2em] mt-2 font-mono">REF: {itemToEdit.ref}</p>
+              </div>
+              <button onClick={() => setIsEditModalOpen(false)} className="h-10 w-10 bg-white/10 rounded-xl flex items-center justify-center hover:bg-white/20 transition-all">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-8 space-y-6">
+              <div className="space-y-4">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Désignation complète</label>
+                <input 
+                  type="text" 
+                  defaultValue={itemToEdit.name}
+                  onChange={(e) => setItemToEdit({...itemToEdit, name: e.target.value})}
+                  className="w-full bg-[#f4f8fb] border-2 border-[#d5e2ea] rounded-2xl p-4 text-xs font-black text-[#0b4867] focus:border-[#1378ac] outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Catégorie</label>
+                  <select 
+                    defaultValue={itemToEdit.category}
+                    onChange={(e) => setItemToEdit({...itemToEdit, category: e.target.value})}
+                    className="w-full bg-[#f4f8fb] border-2 border-[#d5e2ea] rounded-2xl p-4 text-xs font-black text-[#0b4867] focus:border-[#1378ac] outline-none appearance-none"
+                  >
+                    {activeTab === 'boxes' 
+                      ? ["ORTHO", "NEURO", "CARDIO", "DIGESTIF", "GENERAL"].map(c => <option key={c} value={c}>{c}</option>)
+                      : ["Préhension", "Écarteurs", "Coupe", "Suture"].map(c => <option key={c} value={c}>{c}</option>)
+                    }
+                  </select>
+                </div>
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Référence</label>
+                  <input 
+                    type="text" 
+                    defaultValue={itemToEdit.ref}
+                    onChange={(e) => setItemToEdit({...itemToEdit, ref: e.target.value})}
+                    className="w-full bg-[#f4f8fb] border-2 border-[#d5e2ea] rounded-2xl p-4 text-xs font-black text-[#0b4867] focus:border-[#1378ac] outline-none"
+                  />
+                </div>
+              </div>
+              
+              <div className="pt-4 flex flex-col gap-3">
+                <button 
+                  onClick={() => saveEdit(itemToEdit)}
+                  className="w-full py-4 bg-[#11b5a2] text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-[#11b5a2]/20 hover:bg-[#0f9a8a] transition-all flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 className="w-4 h-4" /> Enregistrer les modifications
+                </button>
+                <button 
+                  onClick={() => handleDeleteClick(itemToEdit)}
+                  className="w-full py-4 bg-white border-2 border-red-100 text-red-500 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" /> Supprimer du catalogue
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {isDeleteConfirmOpen && itemToDelete && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-[#0b4867]/80 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300 border border-white/20">
+            <div className="p-8 flex flex-col items-center text-center">
+              <div className="h-20 w-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mb-6 shadow-inner">
+                <Trash2 className="w-10 h-10" />
+              </div>
+              <h3 className="text-xl font-black text-[#0b4867] uppercase tracking-tight mb-2">Confirmation</h3>
+              <p className="text-sm font-bold text-slate-500 leading-relaxed mb-8">
+                Voulez-vous vraiment supprimer <span className="text-red-500">"{itemToDelete.name}"</span> du catalogue ? Cette action est irréversible.
+              </p>
+              <div className="grid grid-cols-2 gap-3 w-full">
+                <button 
+                  onClick={() => setIsDeleteConfirmOpen(false)}
+                  className="py-4 bg-slate-100 text-slate-400 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-200 transition-all"
+                >Annuler</button>
+                <button 
+                  onClick={confirmDelete}
+                  className="py-4 bg-red-500 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-red-200 hover:bg-red-600 transition-all"
+                >Supprimer</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

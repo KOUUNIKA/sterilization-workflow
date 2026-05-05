@@ -1,18 +1,22 @@
 "use client";
 
 import React from "react";
-import { Settings, LayoutDashboard, Package, ShieldCheck, LogOut, ChevronDown } from "lucide-react";
+import { Settings, LayoutDashboard, Package, History, LogOut, ChevronDown } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
 import { MODULE_ZONES, ZONE_INFO } from "../types";
 
 const ROUTE_LABELS: Record<string, string> = {
   "/dashboard": "Tableau de bord",
   "/inventory": "Inventaire & Catalogue",
-  "/qualification": "Qualification",
+  "/history": "Historique",
+  "/qualification": "Tests de contrôle",
   "/predesinfection": "Prédésinfection",
-  "/lavage": "Lavage",
-  "/recomposition": "Recomposition",
-  "/sterilization": "Stérilisation",
+  "/sterilization-reception": "Réception",
+  "/lavage-chargement": "Nettoyage (Entrée)",
+  "/lavage-sortie": "Nettoyage (Sortie)",
+  "/recomposition": "Conditionnement",
+  "/sterilization-chargement": "Stérilisation (Entrée)",
+  "/sterilization-sortie": "Stérilisation (Sortie)",
   "/storage-distribution": "Stockage & Distribution",
   "/patient-liaison": "Liaison Patient",
   "/maintenance": "Maintenance",
@@ -21,6 +25,7 @@ const ROUTE_LABELS: Record<string, string> = {
 const NAV_ITEMS = [
   { path: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
   { path: "/inventory", label: "Catalogue", icon: <Package className="w-4 h-4" /> },
+  { path: "/history", label: "Historique", icon: <History className="w-4 h-4" /> },
 ];
 
 export function Topbar() {
