@@ -1,6 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { 
+  Pencil, 
+  Trash2, 
+  Plus, 
+  Minus, 
+  RotateCcw, 
+  UserMinus, 
+  AlertCircle,
+  X,
+  ChevronLeft,
+  CheckCircle2
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 type Priority = "standard" | "urgent";
 
@@ -17,11 +30,13 @@ interface PredesinfectionWizardProps {
 }
 
 export function PredesinfectionWizard({ cycleId, onValidated }: PredesinfectionWizardProps) {
+  const navigate = useNavigate();
   const [priority, setPriority] = useState<Priority>("standard");
   const [boxName, setBoxName] = useState("");
   const [operatorConfirmed, setOperatorConfirmed] = useState(false);
   const [trayScanned, setTrayScanned] = useState(false);
   const [boxScanned, setBoxScanned] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const isComplete = trayScanned && boxScanned && operatorConfirmed;
 
@@ -37,7 +52,8 @@ export function PredesinfectionWizard({ cycleId, onValidated }: PredesinfectionW
     dosage: "50 mL/L",
     waterVolume: "12 L",
   });
-  const [instruments] = useState<InstrumentLine[]>([
+
+  const [instruments, setInstruments] = useState<InstrumentLine[]>([
     { id: "ins-1", quantity: 4, name: "Ciseaux", designation: "Mayo Droit 14cm" },
     { id: "ins-2", quantity: 2, name: "Pinces", designation: "Hémostatiques Kocher" },
     { id: "ins-3", quantity: 1, name: "Porte-aiguille", designation: "Mayo-Hegar 16cm" },
@@ -47,10 +63,39 @@ export function PredesinfectionWizard({ cycleId, onValidated }: PredesinfectionW
     { id: "ins-13", quantity: 1, name: "Porte-aiguille", designation: "Mayo-Hegar 16cm" },
     { id: "ins-14", quantity: 6, name: "Ecarteurs", designation: "Farabeuf 15cm" },
   ]);
-  const [unusedInstruments] = useState<InstrumentLine[]>([
+  const [unusedInstruments, setUnusedInstruments] = useState<InstrumentLine[]>([
     { id: "un-1", quantity: 2, name: "Lame", designation: "Bistouri n°15 (non utilisée)" },
     { id: "un-2", quantity: 1, name: "Canule", designation: "Aspiration Chirurgicale (neuve)" },
   ]);
+
+  const handleGlobalReset = () => {
+    setTrayScanned(false);
+    setBoxScanned(false);
+    setBoxName("");
+    setOperatorConfirmed(false);
+    setPriority("standard");
+    // Reset instruments would go here if we were fetching them from an API or similar.
+    // For simulation, we can just leave them or reset to default list.
+    setShowResetConfirm(false);
+  };
+
+  const deleteInstrument = (id: string, isUnused: boolean = false) => {
+    if (isUnused) {
+      setUnusedInstruments(prev => prev.filter(ins => ins.id !== id));
+    } else {
+      setInstruments(prev => prev.filter(ins => ins.id !== id));
+    }
+  };
+
+  const updateQuantity = (id: string, delta: number, isUnused: boolean = false) => {
+    const setter = isUnused ? setUnusedInstruments : setInstruments;
+    setter(prev => prev.map(ins => {
+      if (ins.id === id) {
+        return { ...ins, quantity: Math.max(1, ins.quantity + delta) };
+      }
+      return ins;
+    }));
+  };
 
   const triggerSimulation = () => {
     if (!trayScanned) setTrayScanned(true);
@@ -130,9 +175,18 @@ export function PredesinfectionWizard({ cycleId, onValidated }: PredesinfectionW
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-[#0a3952] bg-[#1378ac] text-lg shadow-inner">
                     👩‍🔬
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold tracking-tight truncate">Amina BENALI</p>
-                    <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-[#8de7da] truncate">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold tracking-tight truncate">Amina BENALI</p>
+                      <button 
+                        onClick={() => setOperatorConfirmed(false)}
+                        className="flex items-center gap-1 text-[7px] font-black uppercase tracking-wider text-[#8de7da] hover:text-white transition-colors"
+                      >
+                        <UserMinus className="w-2.5 h-2.5" />
+                        Changer d&apos;utilisateur
+                      </button>
+                    </div>
+                    <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-[#8de7da]/70 truncate">
                       Agent de stérilisation
                     </p>
                   </div>
@@ -157,11 +211,22 @@ export function PredesinfectionWizard({ cycleId, onValidated }: PredesinfectionW
                   Bac de trempage
                 </h2>
               </div>
-              {trayScanned && (
-                <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.18em] text-[#0b786e]">
-                  Scanné
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {trayScanned && (
+                  <button 
+                    onClick={() => setTrayScanned(false)}
+                    className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-slate-400 hover:text-[#1378ac] hover:border-[#1378ac] transition-colors group"
+                  >
+                    <Pencil className="w-2.5 h-2.5" />
+                    Modifier
+                  </button>
+                )}
+                {trayScanned && (
+                  <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.18em] text-[#0b786e]">
+                    Scanné
+                  </span>
+                )}
+              </div>
             </div>
 
             {!trayScanned ? (
@@ -196,6 +261,8 @@ export function PredesinfectionWizard({ cycleId, onValidated }: PredesinfectionW
                     title="Instruments identifiés"
                     count={instruments.length}
                     rows={instruments}
+                    onDelete={(id) => deleteInstrument(id)}
+                    onUpdateQuantity={(id, delta) => updateQuantity(id, delta)}
                   />
                 </div>
               </div>
@@ -216,11 +283,25 @@ export function PredesinfectionWizard({ cycleId, onValidated }: PredesinfectionW
                   Identification conteneur
                 </h2>
               </div>
-              {boxScanned && (
-                <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.18em] text-[#0b786e]">
-                  Identifié
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {boxScanned && (
+                  <button 
+                    onClick={() => {
+                      setBoxScanned(false);
+                      setBoxName("");
+                    }}
+                    className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-slate-400 hover:text-[#1378ac] hover:border-[#1378ac] transition-colors group"
+                  >
+                    <Pencil className="w-2.5 h-2.5" />
+                    Modifier
+                  </button>
+                )}
+                {boxScanned && (
+                  <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.18em] text-[#0b786e]">
+                    Identifié
+                  </span>
+                )}
+              </div>
             </div>
 
             {!boxScanned ? (
@@ -268,6 +349,8 @@ export function PredesinfectionWizard({ cycleId, onValidated }: PredesinfectionW
                     title="Instruments non utilisés"
                     count={unusedInstruments.length}
                     rows={unusedInstruments}
+                    onDelete={(id) => deleteInstrument(id, true)}
+                    onUpdateQuantity={(id, delta) => updateQuantity(id, delta, true)}
                   />
                 </div>
               </div>
@@ -276,15 +359,78 @@ export function PredesinfectionWizard({ cycleId, onValidated }: PredesinfectionW
         </div>
       </div>
 
-      {/* Quick Action Simulation Button - Fixed for hospital efficiency */}
-      {quickActionLabel && (
+      {/* Footer Actions - Always Visible */}
+      <div className="shrink-0 flex items-center justify-between bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto gap-4">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-slate-50 hover:text-slate-600 active:scale-95"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Étape précédente
+          </button>
+          
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-red-50 hover:text-red-500 hover:border-red-100 active:scale-95"
+          >
+            <RotateCcw className="w-4 h-4" />
+            Réinitialiser tout
+          </button>
+        </div>
+
         <button
-          onClick={triggerSimulation}
-          className="fixed bottom-32 right-10 flex items-center gap-3 rounded-full bg-[#0b4867] px-6 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-2xl transition-all hover:bg-[#0a3952] hover:scale-105 active:scale-95 group z-[40]"
+          onClick={() => alert("Prédésinfection Terminée !")}
+          disabled={!isComplete}
+          className={`group relative flex items-center gap-3 rounded-xl px-12 py-3.5 text-[11px] font-black uppercase tracking-[0.22em] transition-all duration-300 shadow-xl ${
+            isComplete
+              ? "bg-[#1378ac] text-white hover:bg-[#0f6a98] hover:-translate-y-0.5 active:scale-95"
+              : "bg-slate-100 text-slate-300 cursor-not-allowed border border-slate-200 shadow-none"
+          }`}
         >
-          <span className="text-xl text-[#8de7da] animate-pulse">⌁</span>
-          <span>{quickActionLabel}</span>
+          {isComplete && <CheckCircle2 className="w-4 h-4" />}
+          Valider l&apos;étape
         </button>
+
+        {quickActionLabel && (
+          <button
+            onClick={triggerSimulation}
+            className="absolute right-6 -top-20 flex items-center gap-3 rounded-full bg-[#0b4867] px-6 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-2xl transition-all hover:bg-[#0a3952] hover:scale-105 active:scale-95 group z-[40]"
+          >
+            <span className="text-xl text-[#8de7da] animate-pulse">⌁</span>
+            <span>{quickActionLabel}</span>
+          </button>
+        )}
+      </div>
+
+      {/* GLOBAL RESET CONFIRMATION MODAL */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowResetConfirm(false)} />
+          <div className="relative bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-300">
+            <div className="h-16 w-16 rounded-2xl bg-red-50 flex items-center justify-center text-red-500 mb-6 mx-auto">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-slate-900 text-center uppercase tracking-tight mb-2">Tout réinitialiser ?</h3>
+            <p className="text-sm font-bold text-slate-500 text-center leading-relaxed mb-8">
+              Êtes-vous sûr de vouloir effacer toutes les données de ce lot ? Cette action est irréversible.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all active:scale-95"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleGlobalReset}
+                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-200 transition-all active:scale-95"
+              >
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -346,10 +492,14 @@ function CompactTable({
   title,
   count,
   rows,
+  onDelete,
+  onUpdateQuantity,
 }: {
   title: string;
   count: number;
   rows: InstrumentLine[];
+  onDelete?: (id: string) => void;
+  onUpdateQuantity?: (id: string, delta: number) => void;
 }) {
   return (
     <div className="flex flex-col h-full overflow-hidden rounded-2xl border border-[#d5e2ea] bg-white shadow-sm">
@@ -362,10 +512,10 @@ function CompactTable({
         </span>
       </div>
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-        <table className="w-full text-left table-fixed">
+        <table className="w-full text-left table-fixed border-collapse">
           <thead className="sticky top-0 z-10 border-b border-[#d5e2ea] bg-white">
             <tr>
-              <th className="w-10 px-2 py-1.5 text-center text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+              <th className="w-[85px] px-2 py-1.5 text-center text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                 Qté
               </th>
               <th className="px-2 py-1.5 text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-400">
@@ -374,16 +524,41 @@ function CompactTable({
               <th className="px-2 py-1.5 text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                 Désignation
               </th>
+              <th className="w-8 px-2 py-1.5 text-center text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#edf5f9]">
             {rows.map((row) => (
-              <tr key={row.id} className="text-[10px] transition-colors hover:bg-[#f8fbfd]">
-                <td className="px-2 py-1.5 text-center font-semibold text-[#1378ac]">
-                  x{row.quantity}
+              <tr key={row.id} className="text-[10px] transition-colors hover:bg-[#f8fbfd] group">
+                <td className="px-2 py-1">
+                  <div className="flex items-center justify-center gap-1.5 rounded-lg bg-slate-50 border border-slate-100 p-0.5">
+                    <button 
+                      onClick={() => onUpdateQuantity?.(row.id, -1)}
+                      className="flex h-5 w-5 items-center justify-center rounded-md bg-white text-slate-400 shadow-sm border border-slate-200 hover:text-[#1378ac] hover:border-[#1378ac] transition-all active:scale-90"
+                    >
+                      <Minus className="w-2.5 h-2.5" />
+                    </button>
+                    <span className="w-4 text-center font-black text-[#1378ac]">{row.quantity}</span>
+                    <button 
+                      onClick={() => onUpdateQuantity?.(row.id, 1)}
+                      className="flex h-5 w-5 items-center justify-center rounded-md bg-white text-slate-400 shadow-sm border border-slate-200 hover:text-[#1378ac] hover:border-[#1378ac] transition-all active:scale-90"
+                    >
+                      <Plus className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
                 </td>
                 <td className="px-2 py-1.5 font-semibold text-slate-800 truncate">{row.name}</td>
                 <td className="px-2 py-1.5 font-medium text-slate-500 truncate">{row.designation}</td>
+                <td className="px-2 py-1.5 text-center">
+                  <button 
+                    onClick={() => onDelete?.(row.id)}
+                    className="opacity-0 group-hover:opacity-100 flex h-6 w-6 items-center justify-center rounded-md text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all active:scale-90"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

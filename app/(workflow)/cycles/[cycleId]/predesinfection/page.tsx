@@ -1,4 +1,4 @@
-import { PredesinfectionWizard } from "@/components/PredesinfectionWizard";
+import { PredesinfectionWizard } from "@/components/steps/PredesinfectionWizard";
 
 export default function PredesinfectionPage({
   params,

@@ -1,0 +1,2 @@
+{"id":"9a152efa-f5d5-4756-aece-477d28021a1d","ts":"2026-04-14T13:28:53.439Z","type":"state_changed","payload":{"module":"sterilization-reception","source":"service-bloc","tray_id":"BAC-TREM-001","transport_id":"ARMOIRE-TRANS-01","agent_id":"BADGE-001","pre_disinfection_status":true}}
+{"id":"f2e77a1d-319f-45b2-bf57-8111898f7bb4","ts":"2026-04-15T14:34:15.838Z","type":"state_changed","payload":{"module":"sterilization-reception","source":"service-bloc","tray_id":"BAC-TREM-001","transport_id":"ARMOIRE-TRANS-01","agent_id":"BADGE-001","pre_disinfection_status":true}}

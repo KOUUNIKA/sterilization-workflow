@@ -1,6 +1,21 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { 
+  Pencil, 
+  X, 
+  Plus, 
+  Trash2, 
+  RotateCcw, 
+  AlertTriangle, 
+  CheckCircle2, 
+  ShieldCheck, 
+  ArrowRight,
+  Package,
+  Settings,
+  AlertCircle,
+  ChevronLeft
+} from "lucide-react";
 
 type InstrumentStatus = "validated" | "missing" | "defective" | "pending";
 
@@ -12,11 +27,21 @@ type Instrument = {
   rackLocation: string;
 };
 
-export function Recomposition() {
+export function Recomposition({ onValidated }: { onValidated?: (isValid: boolean) => void }) {
   // --- States ---
-  const [basketScanned, setBasketScanned] = useState(false);
+  const [targetBoxScanned, setTargetBoxScanned] = useState(false);
   const [aiState, setAiState] = useState<"idle" | "analyzing" | "completed">("idle");
   const [filter, setFilter] = useState<"all" | InstrumentStatus>("all");
+  
+  const [targetDevice, setTargetDevice] = useState("CHIRURGIE GÉNÉRALE #42");
+  const [packagingProtocol, setPackagingProtocol] = useState("CONTENEUR RIGIDE + FILTRE H600");
+  const [showMissingAlert, setShowMissingAlert] = useState(false);
+  const [missingJustification, setMissingJustification] = useState("");
+  const [showEditTargetModal, setShowEditTargetModal] = useState(false);
+  const [showDefectModal, setShowDefectModal] = useState(false);
+  const [selectedForDefect, setSelectedForDefect] = useState<Instrument | null>(null);
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   
   const [instruments, setInstruments] = useState<Instrument[]>([
     { id: "KM-4210", name: "Pince Kocher Droite 14cm", status: "pending", category: "Pince", rackLocation: "RAYON-04 / BAC-12" },
@@ -29,22 +54,86 @@ export function Recomposition() {
     { id: "SM-1103", name: "Ciseaux Metzenbaum", status: "pending", category: "Ciseaux", rackLocation: "RAYON-02 / BAC-06" },
   ]);
 
-  const [showDefectModal, setShowDefectModal] = useState(false);
-  const [selectedForDefect, setSelectedForDefect] = useState<Instrument | null>(null);
-  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [aiDetections, setAiDetections] = useState<Instrument[]>([]);
 
   // --- Logic ---
-  const handleScan = () => setBasketScanned(true);
+  const handleScan = () => setTargetBoxScanned(true);
 
   const runAiRecognition = () => {
     setAiState("analyzing");
     setTimeout(() => {
+      const detected: Instrument[] = [
+        { id: "KM-4210", name: "Pince Kocher Droite 14cm", status: "validated", category: "Pince", rackLocation: "RAYON-04 / BAC-12" },
+        { id: "SM-1102", name: "Ciseaux Mayo Courbes", status: "validated", category: "Ciseaux", rackLocation: "RAYON-02 / BAC-05" },
+        { id: "PH-9920", name: "Ghost Item", status: "defective", category: "Pince", rackLocation: "" },
+        { id: "EF-3341", name: "Ecarteur Farabeuf (Paire)", status: "validated", category: "Ecarteur", rackLocation: "RAYON-01 / BAC-22" },
+      ];
+      setAiDetections(detected);
       setInstruments(prev => prev.map((inst, idx) => ({
         ...inst,
         status: idx === 2 ? "missing" : idx === 4 ? "defective" : "validated"
       })));
       setAiState("completed");
     }, 2500);
+  };
+
+  const removeAiDetection = (id: string) => {
+    setAiDetections(prev => prev.filter(d => d.id !== id));
+  };
+
+  const addManualDetection = () => {
+    const newInst: Instrument = {
+      id: `MAN-${Math.floor(Math.random() * 1000)}`,
+      name: "Nouvel instrument",
+      status: "validated",
+      category: "Pince",
+      rackLocation: "N/A"
+    };
+    setAiDetections(prev => [...prev, newInst]);
+  };
+
+  const updateInstrumentName = (id: string, newName: string) => {
+    setAiDetections(prev => prev.map(d => d.id === id ? { ...d, name: newName } : d));
+  };
+
+  const resetTable = () => {
+    setAiState("idle");
+    setAiDetections([]);
+    setInstruments(prev => prev.map(inst => ({ ...inst, status: "pending" })));
+  };
+
+  const toggleValidation = (id: string) => {
+    setInstruments(prev => prev.map(inst => {
+      if (inst.id === id) {
+        return { ...inst, status: inst.status === "validated" ? "missing" : "validated" };
+      }
+      return inst;
+    }));
+  };
+
+  const changeStatus = (id: string, newStatus: InstrumentStatus) => {
+    setInstruments(prev => prev.map(inst => 
+      inst.id === id ? { ...inst, status: newStatus } : inst
+    ));
+  };
+
+  const handleNextStep = () => {
+    if (counts.missing > 0 && !missingJustification) {
+      setShowMissingAlert(true);
+    } else {
+      setShowPrintPreview(true);
+    }
+  };
+
+  const handleGlobalReset = () => {
+    setTargetBoxScanned(false);
+    setAiState("idle");
+    setAiDetections([]);
+    setInstruments(prev => prev.map(inst => ({ ...inst, status: "pending" })));
+    setTargetDevice("CHIRURGIE GÉNÉRALE #42");
+    setPackagingProtocol("CONTENEUR RIGIDE + FILTRE H600");
+    setMissingJustification("");
+    setShowResetConfirm(false);
   };
 
   const openDefectModal = (inst: Instrument) => {
@@ -78,22 +167,45 @@ export function Recomposition() {
   const expiryDate = new Date();
   expiryDate.setMonth(expiryDate.getMonth() + 6);
 
+  useEffect(() => {
+    onValidated?.(isInventoryComplete);
+  }, [isInventoryComplete, onValidated]);
+
   return (
     <div className="h-full flex flex-col gap-4 text-slate-900 overflow-hidden relative font-app">
-      
-      {!basketScanned ? (
+      {/* Quick Action Simulation Button */}
+      {!isInventoryComplete && targetBoxScanned && (
+        <button
+          onClick={aiState === "idle" ? runAiRecognition : undefined}
+          className="fixed bottom-32 right-10 flex items-center gap-3 rounded-full bg-[#0b4867] px-6 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-2xl transition-all hover:bg-[#0a3952] hover:scale-105 active:scale-95 group z-[40]"
+        >
+          <span className="text-xl text-[#8de7da] animate-pulse">⌁</span>
+          <span>{aiState === "idle" ? "Lancer Vision IA" : "Analyse en cours..."}</span>
+        </button>
+      )}
+      {!targetBoxScanned && (
+        <button
+          onClick={handleScan}
+          className="fixed bottom-32 right-10 flex items-center gap-3 rounded-full bg-[#0b4867] px-6 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-2xl transition-all hover:bg-[#0a3952] hover:scale-105 active:scale-95 group z-[40]"
+        >
+          <span className="text-xl text-[#8de7da] animate-pulse">⌁</span>
+          <span>Scanner la boîte</span>
+        </button>
+      )}
+
+      {!targetBoxScanned ? (
         <div className="flex-1 flex flex-col items-center justify-center bg-white rounded-[2.5rem] border-2 border-dashed border-[#d5e2ea] shadow-sm animate-in fade-in duration-500">
-          <div className="h-32 w-32 rounded-full bg-[#f4f8fb] flex items-center justify-center text-6xl mb-8 shadow-inner">🧺</div>
-          <h2 className="text-3xl font-black text-[#0b4867] mb-3 tracking-tight">Recomposition & Conditionnement</h2>
+          <div className="h-32 w-32 rounded-full bg-[#f4f8fb] flex items-center justify-center text-6xl mb-8 shadow-inner">📦</div>
+          <h2 className="text-3xl font-black text-[#0b4867] mb-3 tracking-tight">Conditionnement</h2>
           <p className="text-slate-500 mb-10 text-center max-w-md font-medium leading-relaxed">
-            Initialisez le processus en scannant le code-barres du panier de lavage ou de la feuille de recomposition.
+            Initialisez le processus en scannant le code-barres de la boîte que vous souhaitez composer.
           </p>
           <button 
             onClick={handleScan}
             className="group flex items-center gap-4 bg-[#0b4867] text-white px-12 py-6 rounded-2xl font-black uppercase tracking-[0.25em] text-xs shadow-[0_20px_50px_rgba(11,72,103,0.3)] hover:bg-[#0a3952] hover:-translate-y-1 active:scale-95 transition-all"
           >
             <span className="text-2xl animate-pulse">⌁</span>
-            Scanner le Panier
+            Scanner la boîte
           </button>
         </div>
       ) : (
@@ -103,10 +215,10 @@ export function Recomposition() {
           <header className="shrink-0 bg-white border border-[#d5e2ea] rounded-3xl p-5 flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-8">
               <div className="flex flex-col">
-                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 mb-1">Traçabilité Panier</span>
+                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 mb-1">Boîte à composer</span>
                 <div className="flex items-center gap-3">
-                  <span className="h-8 w-8 rounded-lg bg-[#edf5f9] flex items-center justify-center text-lg shadow-inner">🧺</span>
-                  <span className="text-xl font-black tracking-tighter text-[#0b4867]">PAN-2026-X8</span>
+                  <span className="h-8 w-8 rounded-lg bg-[#edf5f9] flex items-center justify-center text-lg shadow-inner">📦</span>
+                  <span className="text-xl font-black tracking-tighter text-[#0b4867]">BOX-CHIR-GEN-042</span>
                 </div>
               </div>
               <div className="h-10 w-px bg-[#d5e2ea]" />
@@ -114,7 +226,14 @@ export function Recomposition() {
                 <span className="text-[9px] font-black uppercase tracking-[0.3em] text-[#1378ac] mb-1">Dispositif Cible</span>
                 <div className="flex items-center gap-3">
                   <span className="h-8 w-8 rounded-lg bg-[#e8f4fb] flex items-center justify-center text-lg shadow-inner">📦</span>
-                  <span className="text-xl font-black tracking-tighter text-[#0b4867]">CHIRURGIE GÉNÉRALE #42</span>
+                  <span className="text-xl font-black tracking-tighter text-[#0b4867]">{targetDevice}</span>
+                  <button 
+                    onClick={() => setTargetDevice(targetDevice === "CHIRURGIE GÉNÉRALE #42" ? "CHIRURGIE CARDIAQUE #12" : "CHIRURGIE GÉNÉRALE #42")}
+                    className="ml-2 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#d5e2ea] bg-slate-50 text-[8px] font-black uppercase tracking-wider text-slate-400 hover:text-[#1378ac] hover:border-[#1378ac] transition-all group"
+                  >
+                    <Pencil className="w-2.5 h-2.5" />
+                    Modifier la cible
+                  </button>
                 </div>
               </div>
             </div>
@@ -135,15 +254,26 @@ export function Recomposition() {
                     <span className="h-6 w-6 rounded-full bg-[#1378ac] text-white flex items-center justify-center text-[10px] font-black shadow-md">02</span>
                     <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Table de reconnaissance intelligente IA</h3>
                   </div>
-                  {aiState === "completed" && (
-                    <div className="flex items-center gap-2 bg-[#eafaf7] text-[#11b5a2] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase border border-[#bdece4] shadow-sm">
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#11b5a2] opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[#11b5a2]"></span>
-                      </span>
-                      Deep Learning Actif
-                    </div>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {aiState === "completed" && (
+                      <button 
+                        onClick={resetTable}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#d5e2ea] bg-white text-[9px] font-black uppercase tracking-wider text-slate-400 hover:text-red-500 hover:border-red-200 transition-all active:scale-95"
+                      >
+                        <RotateCcw className="w-2.5 h-2.5" />
+                        Réinitialiser la table
+                      </button>
+                    )}
+                    {aiState === "completed" && (
+                      <div className="flex items-center gap-2 bg-[#eafaf7] text-[#11b5a2] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase border border-[#bdece4] shadow-sm">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#11b5a2] opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-[#11b5a2]"></span>
+                        </span>
+                        Deep Learning Actif
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex-1 rounded-[1.5rem] bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center overflow-hidden relative shadow-inner">
@@ -174,15 +304,35 @@ export function Recomposition() {
                   )}
 
                   {aiState === "completed" && (
-                    <div className="w-full h-full relative p-6 grid grid-cols-4 gap-4 overflow-hidden">
-                      {instruments.map((inst, i) => (
-                        <div key={i} className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-center p-3 text-center transition-all animate-in zoom-in duration-500 delay-[${i*50}ms] shadow-sm ${
+                    <div className="w-full h-full relative p-6 grid grid-cols-4 gap-4 overflow-y-auto custom-scrollbar">
+                      {aiDetections.map((inst, i) => (
+                        <div key={i} className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-center p-3 text-center transition-all animate-in zoom-in duration-500 delay-[${i*50}ms] shadow-sm group relative ${
                           inst.status === 'validated' ? 'border-[#11b5a2] bg-white' : 
                           inst.status === 'missing' ? 'border-[#f59e0b] bg-white' : 
                           'border-[#d6455d] bg-white'
                         }`}>
-                          <div className="text-2xl mb-2">{inst.category === 'Pince' ? '✂️' : inst.category === 'Ciseaux' ? '📐' : '🔧'}</div>
-                          <p className="text-[9px] font-black uppercase text-[#0b4867] truncate w-full tracking-tighter">{inst.id}</p>
+                          <button 
+                            onClick={() => removeAiDetection(inst.id)}
+                            className="absolute top-2 right-2 h-5 w-5 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-red-500 hover:text-white transition-all opacity-0 group-hover:opacity-100 z-10"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                          
+                          <div className="text-2xl mb-1">{inst.category === 'Pince' ? '✂️' : inst.category === 'Ciseaux' ? '📐' : '🔧'}</div>
+                          
+                          {/* Manual Re-identification Trigger */}
+                          <div className="relative group/name cursor-pointer w-full overflow-hidden">
+                            <button 
+                              onClick={() => updateInstrumentName(inst.id, inst.name === "Pince" ? "Ciseau" : "Pince")}
+                              className="text-[9px] font-black uppercase text-[#0b4867] truncate w-full tracking-tighter hover:text-[#1378ac] transition-colors flex items-center justify-center gap-1"
+                            >
+                              {inst.name}
+                              <Pencil className="w-2 h-2 opacity-0 group-hover/name:opacity-50" />
+                            </button>
+                          </div>
+                          
+                          <p className="text-[7px] font-black font-mono text-slate-400 mt-1 uppercase tracking-tighter">{inst.id}</p>
+                          
                           <span className={`text-[8px] font-black uppercase mt-2 px-2 py-0.5 rounded-lg border ${
                             inst.status === 'validated' ? 'text-[#0b786e] bg-[#eafaf7] border-[#bdece4]' : 
                             inst.status === 'missing' ? 'text-[#b45309] bg-[#fff6e9] border-[#ffe4bc]' : 
@@ -190,7 +340,19 @@ export function Recomposition() {
                           }`}>{inst.status === 'validated' ? 'validé' : inst.status === 'missing' ? 'manquant' : 'défectueux'}</span>
                         </div>
                       ))}
-                      <div className="absolute inset-0 bg-gradient-to-b from-[#1378ac]/5 to-transparent h-1/2 w-full animate-scan pointer-events-none border-t-[3px] border-[#1378ac]/30" />
+                      
+                      {/* Manual Add Button at end of grid */}
+                      <button 
+                        onClick={addManualDetection}
+                        className="aspect-square rounded-2xl border-2 border-dashed border-slate-200 bg-white/50 flex flex-col items-center justify-center p-3 text-center hover:border-[#1378ac] hover:bg-white transition-all group shadow-sm"
+                      >
+                        <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-[#1378ac] group-hover:bg-[#1378ac] group-hover:text-white transition-all mb-2">
+                          <Plus className="w-5 h-5" />
+                        </div>
+                        <span className="text-[8px] font-black uppercase tracking-wider text-slate-400 group-hover:text-[#1378ac]">Ajouter manuellement</span>
+                      </button>
+                      
+                      <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-[#1378ac]/5 to-transparent h-1/2 w-full animate-scan pointer-events-none border-t-[3px] border-[#1378ac]/30" />
                     </div>
                   )}
                 </div>
@@ -209,7 +371,15 @@ export function Recomposition() {
                   <div className="flex gap-10 items-center">
                     <div className="flex flex-col items-end">
                       <span className="text-[9px] font-black uppercase tracking-[0.25em] text-white/40 mb-1">Standard emballage</span>
-                      <span className="text-sm font-black text-[#8de7da]">CONTENEUR RIGIDE + FILTRE H600</span>
+                      <select 
+                        value={packagingProtocol}
+                        onChange={(e) => setPackagingProtocol(e.target.value)}
+                        className="bg-transparent text-sm font-black text-[#8de7da] text-right appearance-none cursor-pointer outline-none border-b border-white/20 hover:border-[#8de7da] transition-all"
+                      >
+                        <option value="CONTENEUR RIGIDE + FILTRE H600" className="bg-[#0b4867]">CONTENEUR RIGIDE + FILTRE H600</option>
+                        <option value="SACHET DOUBLE" className="bg-[#0b4867]">SACHET DOUBLE</option>
+                        <option value="FEUILLE DE STÉRILISATION" className="bg-[#0b4867]">FEUILLE DE STÉRILISATION</option>
+                      </select>
                     </div>
                     <div className="h-10 w-px bg-white/10" />
                     <div className="flex flex-col items-end">
@@ -248,38 +418,56 @@ export function Recomposition() {
                 ) : (
                   <div className="space-y-2.5">
                     {filteredInstruments.map((inst) => (
-                      <div key={inst.id} className={`flex items-center justify-between p-4 rounded-2xl border transition-all shadow-sm ${
+                      <div key={inst.id} className={`flex items-center justify-between p-4 rounded-2xl border transition-all shadow-sm group ${
                         inst.status === 'validated' ? 'bg-[#eafaf7]/40 border-[#bdece4] text-[#0b786e]' :
                         inst.status === 'missing' ? 'bg-[#fff6e9]/40 border-[#ffe4bc] text-[#b45309]' :
                         inst.status === 'defective' ? 'bg-[#fdecef]/40 border-[#f8d7da] text-[#d6455d]' :
                         'bg-white border-[#d5e2ea] text-slate-600'
                       }`}>
                         <div className="flex items-center gap-4 min-w-0">
-                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center text-lg font-black shadow-sm shrink-0 ${
-                            inst.status === 'validated' ? 'bg-[#11b5a2] text-white' :
-                            inst.status === 'missing' ? 'bg-[#f59e0b] text-white' :
-                            inst.status === 'defective' ? 'bg-[#d6455d] text-white' :
-                            'bg-slate-100 text-slate-400'
-                          }`}>
-                            {inst.status === 'validated' ? '✓' : inst.status === 'missing' ? '?' : inst.status === 'defective' ? '!' : '•'}
-                          </div>
+                          {/* Toggle Validation Checkbox */}
+                          <button 
+                            onClick={() => toggleValidation(inst.id)}
+                            className={`h-6 w-6 rounded-lg border-2 flex items-center justify-center transition-all shadow-inner shrink-0 ${
+                              inst.status === 'validated' ? 'bg-[#11b5a2] border-[#11b5a2] text-white' : 'bg-white border-slate-200 text-transparent'
+                            }`}
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </button>
+                          
                           <div className="min-w-0">
                             <p className="text-xs font-black truncate tracking-tight">{inst.name}</p>
                             <p className="text-[9px] font-black font-mono mt-0.5 opacity-60 tracking-wider">{inst.id}</p>
                           </div>
                         </div>
+                        
                         <div className="flex items-center gap-2 shrink-0 ml-4">
+                          {/* Status Select/Toggle */}
+                          <div className="relative">
+                            <select 
+                              value={inst.status}
+                              onChange={(e) => changeStatus(inst.id, e.target.value as InstrumentStatus)}
+                              className={`text-[8px] font-black uppercase px-2 py-1.5 rounded-xl border appearance-none pr-6 cursor-pointer outline-none transition-all ${
+                                inst.status === 'validated' ? 'text-[#0b786e] bg-[#eafaf7] border-[#bdece4]' : 
+                                inst.status === 'missing' ? 'text-[#b45309] bg-[#fff6e9] border-[#ffe4bc]' : 
+                                'text-[#d6455d] bg-[#fdecef] border-[#f8d7da]'
+                              }`}
+                            >
+                              <option value="validated">Conforme</option>
+                              <option value="missing">Manquant</option>
+                              <option value="defective">Défectueux</option>
+                              <option value="pending">En attente</option>
+                            </select>
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
+                              <Settings className="w-2.5 h-2.5" />
+                            </div>
+                          </div>
+
                           {inst.status === "defective" && (
                             <button 
                               onClick={() => openDefectModal(inst)}
                               className="px-4 py-2 bg-[#d6455d] text-white text-[9px] font-black uppercase rounded-xl shadow-[0_4px_12px_rgba(214,69,93,0.3)] hover:scale-105 transition-all"
                             >Signaler</button>
-                          )}
-                          {inst.status === "missing" && (
-                            <button 
-                              onClick={() => setInstruments(prev => prev.map(i => i.id === inst.id ? {...i, status: 'validated'} : i))}
-                              className="px-4 py-2 bg-[#f59e0b] text-white text-[9px] font-black uppercase rounded-xl shadow-[0_4px_12px_rgba(245,158,11,0.3)] hover:scale-105 transition-all"
-                            >Trouvé</button>
                           )}
                         </div>
                       </div>
@@ -288,21 +476,7 @@ export function Recomposition() {
                 )}
               </div>
 
-              {/* STEP 6: Final Action */}
-              <div className="p-6 border-t border-[#d5e2ea] bg-[#f8fbfd] shrink-0 flex justify-center">
-                <button 
-                  onClick={() => setShowPrintPreview(true)}
-                  disabled={!isInventoryComplete}
-                  className={`w-full max-w-md group flex items-center justify-center gap-5 py-6 rounded-[1.5rem] font-black uppercase tracking-[0.3em] text-xs transition-all shadow-2xl ${
-                    isInventoryComplete 
-                      ? 'bg-[#1378ac] text-white hover:bg-[#0f6a98] hover:-translate-y-1.5 active:scale-95 shadow-[0_20px_40px_rgba(19,120,172,0.3)]' 
-                      : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                  }`}
-                >
-                  <span className="text-2xl group-hover:scale-110 transition-transform">🖨️</span>
-                  Imprimer l'étiquette de traçabilité
-                </button>
-              </div>
+              {/* STEP 6: Final Action moved to global nav */}
             </section>
           </div>
         </div>
@@ -413,7 +587,7 @@ export function Recomposition() {
               <div className="space-y-3">
                 <div className="flex justify-between items-end border-b border-dashed border-slate-300 pb-1">
                   <span className="font-bold opacity-50">Dispositif:</span>
-                  <span className="font-black text-sm tracking-tighter">CHIRURGIE GÉNÉRALE #42</span>
+                  <span className="font-black text-sm tracking-tighter">{targetDevice}</span>
                 </div>
                 <div className="flex justify-between items-end border-b border-dashed border-slate-300 pb-1">
                   <span className="font-bold opacity-50">Destination:</span>
@@ -455,6 +629,118 @@ export function Recomposition() {
                 onClick={() => {alert('Impression lancée via le driver ZPL...'); setShowPrintPreview(false);}} 
                 className="flex-1 bg-[#1378ac] text-white py-5 rounded-2xl font-black uppercase tracking-[0.3em] text-[10px] shadow-[0_15px_30px_rgba(19,120,172,0.3)] hover:bg-[#0f6a98] hover:-translate-y-1 active:scale-95 transition-all"
               >Confirmer & Imprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MISSING ITEM ALERT MODAL */}
+      {showMissingAlert && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-amber-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300 border-4 border-amber-400">
+            <div className="bg-amber-400 p-8 text-amber-950 flex flex-col items-center gap-4">
+              <AlertTriangle className="w-16 h-16" />
+              <div className="text-center">
+                <h3 className="text-2xl font-black uppercase tracking-tighter leading-none">Instruments manquants !</h3>
+                <p className="text-amber-900/70 text-[10px] font-black uppercase tracking-[0.2em] mt-2">Validation de kit incomplet</p>
+              </div>
+            </div>
+            <div className="p-8 space-y-6">
+              <p className="text-sm font-bold text-slate-600 text-center leading-relaxed">
+                Le kit contient encore des éléments manquants ({counts.missing}). Une justification est obligatoire pour continuer.
+              </p>
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em]">Justification de l&apos;écart</label>
+                <textarea 
+                  value={missingJustification}
+                  onChange={(e) => setMissingJustification(e.target.value)}
+                  placeholder="Ex: Instrument envoyé en réparation / Perdu..."
+                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 text-xs font-bold text-[#0b4867] focus:border-amber-400 outline-none h-32 resize-none transition-all"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <button 
+                  onClick={() => setShowMissingAlert(false)}
+                  className="bg-slate-100 text-slate-400 py-4 rounded-xl font-black uppercase tracking-widest text-[9px] hover:bg-slate-200 transition-all"
+                >Annuler</button>
+                <button 
+                  disabled={!missingJustification.trim()}
+                  onClick={() => {
+                    setShowMissingAlert(false);
+                    setShowPrintPreview(true);
+                  }}
+                  className={`py-4 rounded-xl font-black uppercase tracking-widest text-[9px] shadow-lg transition-all ${
+                    missingJustification.trim() ? 'bg-amber-500 text-white shadow-amber-200 hover:-translate-y-1' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                  }`}
+                >Valider l&apos;écart</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FOOTER ACTIONS */}
+      {targetBoxScanned && (
+        <footer className="shrink-0 flex items-center justify-between bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-[#d5e2ea] shadow-lg mt-4 gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setTargetBoxScanned(false)}
+              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-slate-50 hover:text-slate-600 active:scale-95"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Étape précédente
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-red-50 hover:text-red-500 hover:border-red-100 active:scale-95"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Tout effacer
+            </button>
+
+            <button
+              onClick={handleNextStep}
+              className={`group relative flex items-center gap-3 rounded-xl px-12 py-3.5 text-[11px] font-black uppercase tracking-[0.22em] transition-all duration-300 shadow-xl ${
+                aiState === 'completed'
+                  ? "bg-[#1378ac] text-white hover:bg-[#0f6a98] hover:-translate-y-0.5 active:scale-95"
+                  : "bg-slate-100 text-slate-300 cursor-not-allowed border border-slate-200 shadow-none"
+              }`}
+            >
+              {aiState === 'completed' && <CheckCircle2 className="w-4 h-4" />}
+              Étiquetage & Validation
+            </button>
+          </div>
+        </footer>
+      )}
+
+      {/* GLOBAL RESET CONFIRMATION MODAL */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowResetConfirm(false)} />
+          <div className="relative bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-300">
+            <div className="h-16 w-16 rounded-2xl bg-red-50 flex items-center justify-center text-red-500 mb-6 mx-auto">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-slate-900 text-center uppercase tracking-tight mb-2">Tout effacer ?</h3>
+            <p className="text-sm font-bold text-slate-500 text-center leading-relaxed mb-8">
+              Êtes-vous sûr de vouloir effacer toutes les données de cette recomposition ? Cette action est irréversible.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all active:scale-95"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleGlobalReset}
+                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-200 transition-all active:scale-95"
+              >
+                Confirmer
+              </button>
             </div>
           </div>
         </div>

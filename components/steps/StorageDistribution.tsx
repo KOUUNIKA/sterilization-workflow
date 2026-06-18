@@ -1,8 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { 
+  Pencil, 
+  RotateCcw, 
+  Trash2, 
+  UserMinus, 
+  AlertCircle, 
+  ChevronLeft,
+  CheckCircle2,
+  X
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
-export function StorageDistribution() {
+export function StorageDistribution({ onValidated }: { onValidated?: (isValid: boolean) => void }) {
+  const navigate = useNavigate();
   const [phase, setPhase] = useState<1 | 2>(1); // 1: Stockage, 2: Distribution
 
   // --- ÉTATS PHASE 1: STOCKAGE ---
@@ -15,6 +27,29 @@ export function StorageDistribution() {
   const [distriRoom, setDistriRoom] = useState("");
   const [distriAgent, setDistriAgent] = useState({ name: "", role: "" });
   const [distriLinked, setDistriLinked] = useState(false);
+
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const handleGlobalReset = () => {
+    if (phase === 1) {
+      setStorageItem("");
+      setStorageShelf("");
+      setStorageConfirmed(false);
+    } else {
+      setDistriItem("");
+      setDistriRoom("");
+      setDistriAgent({ name: "", role: "" });
+      setDistriLinked(false);
+    }
+    setShowResetConfirm(false);
+  };
+
+  const isStorageComplete = storageItem !== "" && storageShelf !== "" && storageConfirmed;
+  const isDistriComplete = distriItem !== "" && distriRoom !== "" && distriAgent.name !== "" && distriLinked;
+
+  useEffect(() => {
+    onValidated?.(phase === 1 ? isStorageComplete : isDistriComplete);
+  }, [phase, isStorageComplete, isDistriComplete, onValidated]);
 
   const triggerSimulation = () => {
     if (phase === 1) {
@@ -85,9 +120,20 @@ export function StorageDistribution() {
           <div className="h-full flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="grid md:grid-cols-2 gap-4 shrink-0">
                <section className={`bg-white/95 p-5 rounded-3xl border transition-all shadow-sm ${storageItem ? 'border-[#1378ac] ring-4 ring-[#edf5f9]' : 'border-[#d5e2ea]'}`}>
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1378ac] text-[9px] font-semibold text-white">1</span>
-                    <h3 className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#0b4867]">Scan dispositif</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1378ac] text-[9px] font-semibold text-white">1</span>
+                      <h3 className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#0b4867]">Scan dispositif</h3>
+                    </div>
+                    {storageItem && (
+                      <button 
+                        onClick={() => setStorageItem("")}
+                        className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-slate-400 hover:text-[#1378ac] hover:border-[#1378ac] transition-colors"
+                      >
+                        <Pencil className="w-2.5 h-2.5" />
+                        Modifier
+                      </button>
+                    )}
                   </div>
                   {!storageItem ? (
                     <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] py-6 text-slate-400 text-center">
@@ -103,9 +149,20 @@ export function StorageDistribution() {
                </section>
 
                <section className={`bg-white/95 p-5 rounded-3xl border transition-all shadow-sm ${storageShelf ? 'border-[#11b5a2] ring-4 ring-[#eafaf7]' : 'border-[#d5e2ea] opacity-50'}`}>
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#11b5a2] text-[9px] font-semibold text-white">2</span>
-                    <h3 className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#0b4867]">Localisation</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#11b5a2] text-[9px] font-semibold text-white">2</span>
+                      <h3 className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#0b4867]">Localisation</h3>
+                    </div>
+                    {storageShelf && (
+                      <button 
+                        onClick={() => setStorageShelf("")}
+                        className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-slate-400 hover:text-[#11b5a2] hover:border-[#11b5a2] transition-colors"
+                      >
+                        <Pencil className="w-2.5 h-2.5" />
+                        Modifier
+                      </button>
+                    )}
                   </div>
                   {!storageShelf ? (
                     <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] py-6 text-slate-400 text-center">
@@ -162,9 +219,20 @@ export function StorageDistribution() {
           <div className="h-full flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
             <div className="flex-1 grid lg:grid-cols-3 gap-4 min-h-0 overflow-y-auto custom-scrollbar pr-2">
                <section className={`bg-white/95 p-6 rounded-3xl border transition-all shadow-sm h-fit ${distriItem ? 'border-[#1378ac] ring-4 ring-[#edf5f9]' : 'border-[#d5e2ea]'}`}>
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1378ac] text-[9px] font-semibold text-white shadow-md">1</span>
-                    <h3 className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#0b4867]">Scan sortie</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1378ac] text-[9px] font-semibold text-white shadow-md">1</span>
+                      <h3 className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#0b4867]">Scan sortie</h3>
+                    </div>
+                    {distriItem && (
+                      <button 
+                        onClick={() => setDistriItem("")}
+                        className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-slate-400 hover:text-[#1378ac] hover:border-[#1378ac] transition-colors"
+                      >
+                        <Pencil className="w-2.5 h-2.5" />
+                        Modifier
+                      </button>
+                    )}
                   </div>
                   {!distriItem ? (
                     <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] py-10 text-slate-400 text-center">
@@ -189,9 +257,20 @@ export function StorageDistribution() {
                </section>
 
                <section className={`bg-white/95 p-6 rounded-3xl border transition-all shadow-sm h-fit ${distriRoom ? 'border-[#11b5a2] ring-4 ring-[#eafaf7]' : 'border-[#d5e2ea] opacity-50'}`}>
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#11b5a2] text-[9px] font-semibold text-white shadow-md">2</span>
-                    <h3 className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#0b4867]">Affectation</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#11b5a2] text-[9px] font-semibold text-white shadow-md">2</span>
+                      <h3 className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#0b4867]">Affectation</h3>
+                    </div>
+                    {distriRoom && (
+                      <button 
+                        onClick={() => setDistriRoom("")}
+                        className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-slate-400 hover:text-[#11b5a2] hover:border-[#11b5a2] transition-colors"
+                      >
+                        <Pencil className="w-2.5 h-2.5" />
+                        Modifier
+                      </button>
+                    )}
                   </div>
                   {!distriRoom ? (
                     <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] py-10 text-slate-400 text-center">
@@ -207,9 +286,20 @@ export function StorageDistribution() {
                </section>
 
                <section className={`bg-white/95 p-6 rounded-3xl border transition-all shadow-sm h-fit ${distriAgent.name ? 'border-[#0b4867] ring-4 ring-[#edf5f9]' : 'border-[#d5e2ea] opacity-50'}`}>
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0b4867] text-[9px] font-semibold text-white shadow-md">3</span>
-                    <h3 className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#0b4867]">Responsable</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0b4867] text-[9px] font-semibold text-white shadow-md">3</span>
+                      <h3 className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#0b4867]">Responsable</h3>
+                    </div>
+                    {distriAgent.name && (
+                      <button 
+                        onClick={() => setDistriAgent({ name: "", role: "" })}
+                        className="flex items-center gap-1 text-[7px] font-black uppercase tracking-wider text-slate-400 hover:text-[#0b4867] transition-colors"
+                      >
+                        <UserMinus className="w-2.5 h-2.5" />
+                        Changer
+                      </button>
+                    )}
                   </div>
                   {!distriAgent.name ? (
                     <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] py-10 text-slate-400 text-center">
@@ -238,15 +328,94 @@ export function StorageDistribution() {
         )}
       </div>
 
-      {/* Quick Action Button - Floating within main area */}
+      {/* Quick Action Button - Floating fixed position */}
       {quickActionLabel && (
         <button
           onClick={triggerSimulation}
-          className="shrink-0 flex items-center justify-center gap-2 rounded-full bg-[#0b4867] px-6 py-3.5 text-[10px] font-bold uppercase tracking-[0.2em] text-white shadow-xl transition-all hover:bg-[#0a3952] hover:scale-105 active:scale-95 group mt-auto self-center"
+          className="fixed bottom-32 left-1/2 -translate-x-1/2 flex items-center justify-center gap-2 rounded-full bg-[#0b4867] px-8 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-2xl transition-all hover:bg-[#0a3952] hover:scale-105 active:scale-95 group z-[40]"
         >
-          <span className="text-lg text-[#8de7da]">⌁</span>
+          <span className="text-xl text-[#8de7da] animate-pulse">⌁</span>
           <span>{quickActionLabel}</span>
         </button>
+      )}
+
+      {/* Footer Actions */}
+      <footer className="shrink-0 flex items-center justify-between bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto gap-4">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-slate-50 hover:text-slate-600 active:scale-95"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Étape précédente
+          </button>
+          
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-red-50 hover:text-red-500 hover:border-red-100 active:scale-95"
+          >
+            <RotateCcw className="w-4 h-4" />
+            Tout effacer
+          </button>
+        </div>
+
+        {phase === 1 ? (
+          <button
+            onClick={() => setPhase(2)}
+            disabled={!isStorageComplete}
+            className={`group relative flex items-center gap-3 rounded-xl px-12 py-3.5 text-[11px] font-black uppercase tracking-[0.22em] transition-all duration-300 shadow-xl ${
+              isStorageComplete
+                ? "bg-[#1378ac] text-white hover:bg-[#0f6a98] hover:-translate-y-0.5 active:scale-95 shadow-[#1378ac]/20"
+                : "bg-slate-100 text-slate-300 cursor-not-allowed border border-slate-200 shadow-none"
+            }`}
+          >
+            {isStorageComplete && <CheckCircle2 className="w-4 h-4" />}
+            Phase Distribution
+          </button>
+        ) : (
+          <button
+            onClick={() => navigate("/")}
+            disabled={!isDistriComplete}
+            className={`group relative flex items-center gap-3 rounded-xl px-12 py-3.5 text-[11px] font-black uppercase tracking-[0.22em] transition-all duration-300 shadow-xl ${
+              isDistriComplete
+                ? "bg-[#11b5a2] text-white hover:bg-[#0fa391] hover:-translate-y-0.5 active:scale-95 shadow-[#11b5a2]/20"
+                : "bg-slate-100 text-slate-300 cursor-not-allowed border border-slate-200 shadow-none"
+            }`}
+          >
+            {isDistriComplete && <CheckCircle2 className="w-4 h-4" />}
+            Terminer le cycle
+          </button>
+        )}
+      </footer>
+
+      {/* GLOBAL RESET CONFIRMATION MODAL */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowResetConfirm(false)} />
+          <div className="relative bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-300">
+            <div className="h-16 w-16 rounded-2xl bg-red-50 flex items-center justify-center text-red-500 mb-6 mx-auto">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-slate-900 text-center uppercase tracking-tight mb-2">Tout effacer ?</h3>
+            <p className="text-sm font-bold text-slate-500 text-center leading-relaxed mb-8">
+              Êtes-vous sûr de vouloir effacer toutes les données de {phase === 1 ? 'stockage' : 'distribution'} ?
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all active:scale-95"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleGlobalReset}
+                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-200 transition-all active:scale-95"
+              >
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {distriLinked && (

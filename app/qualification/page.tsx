@@ -1,7 +1,5 @@
-"use client";
-
 import { AppContent } from "@/components/App";
 
-export default function Home() {
+export default function QualificationPage() {
   return <AppContent />;
 }
