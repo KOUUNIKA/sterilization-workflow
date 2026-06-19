@@ -192,7 +192,7 @@ export function PatientLiaison() {
       </section>
 
       {/* Footer Section */}
-      <footer className="shrink-0 flex items-center justify-between bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto gap-4">
+      <footer className="shrink-0 flex items-center justify-between bg-card p-4 rounded-xl border border-border shadow-sm mt-auto gap-4">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}

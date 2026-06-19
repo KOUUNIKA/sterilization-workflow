@@ -56,6 +56,7 @@ export function Chatbot({ currentZone }: ChatbotProps) {
       "dashboard": "Bonjour ! Je suis votre assistant de stérilisation. Comment puis-je vous aider aujourd'hui ?",
       "maintenance": "Mode maintenance activé. Consultez les protocoles de vérification des autoclaves.",
       "edition": "Mode édition. Besoin d'aide pour générer un rapport ?",
+      "inventory": "Bonjour ! Je suis votre assistant inventaire. Consultez et gérez le stock de dispositifs stériles.",
     };
 
     setMessages([

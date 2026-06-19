@@ -1,146 +1,125 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { 
-  Search, 
-  Plus, 
-  Filter, 
-  Package, 
-  Wrench, 
-  Printer, 
-  AlertTriangle, 
-  X, 
-  ChevronRight, 
-  Info,
-  CheckCircle2,
-  Settings,
+import React, { useState, useMemo, useEffect } from "react";
+import {
+  Search,
+  Plus,
+  Filter,
+  Package,
+  Wrench,
+  Printer,
+  AlertTriangle,
+  X,
+  ChevronRight,
+  ChevronDown,
   ShieldAlert,
   ArrowRightLeft,
-  ArrowRight,
-  Eye,
-  Edit2,
-  FileText,
-  Calendar,
   RotateCcw,
-  Trash2,
   ChevronLeft,
-  AlertCircle
+  AlertCircle,
+  MapPin,
+  CheckCircle2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 type TabType = "boxes" | "instruments" | "packaging";
-type ModeType = "referentiel" | "inventaire";
 type InstrumentStatus = "En Stock" | "Utilisé" | "Sale" | "En Maintenance";
 
 export function InventoryManagement() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>("boxes");
-  const [mode, setMode] = useState<ModeType>("referentiel");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBox, setSelectedBox] = useState<any>(null);
   const [selectedInstrument, setSelectedInstrument] = useState<any>(null);
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>("Toutes");
-  const [isConfigMode, setIsConfigMode] = useState(false);
   const [showConflictModal, setShowConflictModal] = useState<{show: boolean, type: 'orange' | 'red', message: string, data?: any}>({show: false, type: 'orange', message: ''});
   const [showRegisterForm, setShowRegisterForm] = useState<{show: boolean, id: string}>({show: false, id: ''});
-  const [isDatasheetModalOpen, setIsDatasheetModalOpen] = useState(false);
-  const [datasheetBox, setDatasheetBox] = useState<any>(null);
-  const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isTraceabilityModalOpen, setIsTraceabilityModalOpen] = useState(false);
-  const [isBoxDetailsModalOpen, setIsBoxDetailsModalOpen] = useState(false);
-  const [isInstrumentDetailsModalOpen, setIsInstrumentDetailsModalOpen] = useState(false);
-  const [selectedCatalogueInstrument, setSelectedCatalogueInstrument] = useState<any>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [instrumentsPopupBox, setInstrumentsPopupBox] = useState<any | null>(null);
 
-  // --- NEW STATES FOR CATALOGUE EDIT/DELETE ---
-  const [catalogBoxes, setCatalogBoxes] = useState(referentielBoxes);
-  const [catalogInstruments, setCatalogInstruments] = useState(referentielInstruments);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [itemToEdit, setItemToEdit] = useState<any>(null);
-  const [itemToDelete, setItemToDelete] = useState<any>(null);
+  const [inventaireBoxesData, setInventaireBoxesData] = useState<any[]>([]);
+  const [inventaireInstrumentsData, setInventaireInstrumentsData] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
+  const [instrumentToReassign, setInstrumentToReassign] = useState<any>(null);
+  const [reassignTraySearch, setReassignTraySearch] = useState("");
+  const [allTrays, setAllTrays] = useState<any[]>([]);
+  const [selectedReassignTray, setSelectedReassignTray] = useState<any>(null);
+  const [isReassigning, setIsReassigning] = useState(false);
+
+  useEffect(() => {
+    setIsLoading(true);
+    Promise.all([
+      fetch("/api/trays/inventory").then((r) => r.json()),
+      fetch("/api/instruments").then((r) => r.json()),
+    ]).then(([trayData, instData]) => {
+      setInventaireBoxesData(trayData.trays ?? []);
+      setInventaireInstrumentsData(instData.instruments ?? []);
+    }).finally(() => setIsLoading(false));
+  }, []);
 
   const handleGlobalReset = () => {
     setSearchQuery("");
     setSelectedBox(null);
     setSelectedInstrument(null);
     setSelectedSpecialty("Toutes");
-    setSelectedRows([]);
-    setIsConfigMode(false);
     setShowResetConfirm(false);
   };
 
-  const handleEditItem = (item: any) => {
-    setItemToEdit(item);
-    setIsEditModalOpen(true);
+  const openReassignModal = (inst: any) => {
+    setInstrumentToReassign(inst);
+    setSelectedReassignTray(null);
+    setReassignTraySearch("");
+    setIsReassignModalOpen(true);
+    fetch("/api/trays").then(r => r.json()).then(d => setAllTrays(d.trays ?? []));
   };
 
-  const handleDeleteClick = (item: any) => {
-    setItemToDelete(item);
-    setIsDeleteConfirmOpen(true);
-  };
-
-  const confirmDelete = () => {
-    if (activeTab === 'boxes') {
-      setCatalogBoxes(prev => prev.filter(b => b.id !== itemToDelete.id));
-    } else {
-      setCatalogInstruments(prev => prev.filter(i => i.id !== itemToDelete.id));
+  const confirmReassign = async () => {
+    if (!instrumentToReassign || !selectedReassignTray) return;
+    setIsReassigning(true);
+    try {
+      const res = await fetch(`/api/instruments/${encodeURIComponent(instrumentToReassign.id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trayId: selectedReassignTray.id }),
+      });
+      if (res.ok) {
+        setIsReassignModalOpen(false);
+        setInstrumentToReassign(null);
+        setSelectedReassignTray(null);
+        // Refresh inventaire instruments
+        fetch("/api/instruments").then(r => r.json()).then(d => setInventaireInstrumentsData(d.instruments ?? []));
+      }
+    } finally {
+      setIsReassigning(false);
     }
-    setIsDeleteConfirmOpen(false);
-    setItemToDelete(null);
-    setIsEditModalOpen(false); // If opened from edit modal
-  };
-
-  const saveEdit = (updatedItem: any) => {
-    if (activeTab === 'boxes') {
-      setCatalogBoxes(prev => prev.map(b => b.id === updatedItem.id ? updatedItem : b));
-    } else {
-      setCatalogInstruments(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
-    }
-    setIsEditModalOpen(false);
-    setItemToEdit(null);
   };
 
   const filteredInventaireBoxes = useMemo(() => {
-    return inventaireBoxes.filter(box => {
+    return inventaireBoxesData.filter(box => {
       const matchesSearch = box.barcode.toLowerCase().includes(searchQuery.toLowerCase()) || box.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesSpecialty = selectedSpecialty === "Toutes" || box.category === selectedSpecialty;
       return matchesSearch && matchesSpecialty;
     });
-  }, [searchQuery, selectedSpecialty]);
-
-  const filteredCatalogBoxes = useMemo(() => {
-    return catalogBoxes.filter(box => {
-      const matchesSearch = box.ref.toLowerCase().includes(searchQuery.toLowerCase()) || box.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesSpecialty = selectedSpecialty === "Toutes" || box.category === selectedSpecialty;
-      return matchesSearch && matchesSpecialty;
-    });
-  }, [searchQuery, selectedSpecialty, catalogBoxes]);
+  }, [searchQuery, selectedSpecialty, inventaireBoxesData]);
 
   const filteredInventaireInstruments = useMemo(() => {
-    return inventaireInstruments.filter(inst => {
+    return inventaireInstrumentsData.filter(inst => {
       const matchesSearch = inst.id.toLowerCase().includes(searchQuery.toLowerCase()) || inst.name.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesSearch;
     });
-  }, [searchQuery]);
-
-  const filteredCatalogInstruments = useMemo(() => {
-    return catalogInstruments.filter(inst => {
-      const matchesSearch = inst.ref.toLowerCase().includes(searchQuery.toLowerCase()) || inst.name.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesSearch;
-    });
-  }, [searchQuery, catalogInstruments]);
+  }, [searchQuery, inventaireInstrumentsData]);
 
   const handleScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       const id = searchQuery.trim();
       if (!id) return;
 
-      // Simulation logic for inventory scan
-      const foundInInventory = [...inventaireBoxes, ...inventaireInstruments].find(item => item.id === id || (item as any).barcode === id);
+      const foundInInventory = [...inventaireBoxesData, ...inventaireInstrumentsData].find(item => item.id === id || (item as any).barcode === id);
 
       if (foundInInventory) {
-        // Step 1: Found in physical inventory
         if ('composition' in foundInInventory) {
           setSelectedBox(foundInInventory);
           setActiveTab('boxes');
@@ -149,633 +128,247 @@ export function InventoryManagement() {
           setActiveTab('instruments');
         }
       } else {
-        // Step 2: Not in physical stock, check if it's a valid model in Catalogue
-        const foundInCatalogue = [...referentielBoxes, ...referentielInstruments].find(item => item.id === id || (item as any).ref === id);
-        
-        if (foundInCatalogue) {
-          // It's a valid model, but this specific serial number isn't registered
-          setShowRegisterForm({ show: true, id });
-        } else {
-          // Totally unknown ID
-          alert("Code-barres inconnu. Cet article n'existe pas dans le catalogue de référence.");
-        }
+        alert("Code-barres inconnu. Cet article n'existe pas dans l'inventaire.");
       }
       setSearchQuery("");
     }
   };
 
-  const handlePrint = () => {
-    alert(`Génération du PDF technique pour : ${selectedBox?.name || selectedInstrument?.name}...`);
-  };
-
-  const simulateScanToBox = () => {
-    if (!selectedBox) return;
-    
-    // In a real app, we would search for the scanned instrument model in the box's theoretical composition
-    // Here we simulate a scan of "Ecarteur Farabeuf" which might or might not be in the composition
-    const instrumentName = "Ecarteur Farabeuf";
-    const isInTheoreticalComposition = selectedBox.composition?.some((item: any) => item.name.includes(instrumentName));
-
-    if (!isInTheoreticalComposition) {
-      setShowConflictModal({
-        show: true,
-        type: 'red',
-        message: `Attention : Cet instrument (${instrumentName}) ne fait pas partie de la composition théorique de cette boîte (${selectedBox.name}).`
-      });
-    } else {
-      // Membership conflict simulation
-      const alreadyInAnotherBox = Math.random() < 0.3;
-      if (alreadyInAnotherBox) {
-        setShowConflictModal({
-          show: true,
-          type: 'orange',
-          message: `Cet instrument (${instrumentName} #102) appartient déjà à la [Boîte Appendicectomie #04]. Voulez-vous le transférer ?`
-        });
-      } else {
-        alert("Instrument ajouté avec succès à la boîte.");
-      }
-    }
-  };
-
   return (
-    <div className={`h-full flex flex-col text-slate-900 overflow-hidden transition-colors duration-500 ${mode === 'referentiel' ? 'bg-[#f8f9fa]' : 'bg-transparent'}`}>
-      {/* Refactored Header: Breadcrumbs & Mode Selector */}
-      <div className="flex items-center justify-between px-8 py-4 shrink-0 bg-white/50 backdrop-blur-sm border-b border-[#d5e2ea]">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-[#1378ac] rounded-lg flex items-center justify-center text-white shadow-lg">
-              <Settings className="w-5 h-5" />
-            </div>
-            <div className="h-4 w-px bg-slate-200 mx-2" />
-            <div className="flex flex-col">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Referentiel</span>
-              <span className="text-xs font-black text-[#0b4867] uppercase tracking-wider">Inventaire & Config</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex bg-white p-1 rounded-xl border border-[#d5e2ea] shadow-sm">
-          <button 
-            onClick={() => { setMode("referentiel"); setSelectedBox(null); setSelectedInstrument(null); setIsConfigMode(false); }}
-            className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 ${mode === "referentiel" ? 'bg-[#1378ac] text-white shadow-md' : 'text-slate-400 hover:text-[#1378ac]'}`}
-          >
-            <Info className="w-3.5 h-3.5" />
-            Catalogue
-          </button>
-          <button 
-            onClick={() => { setMode("inventaire"); setSelectedBox(null); setSelectedInstrument(null); setIsConfigMode(false); }}
-            className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 ${mode === "inventaire" ? 'bg-[#11b5a2] text-white shadow-md' : 'text-slate-400 hover:text-[#11b5a2]'}`}
-          >
-            <Package className="w-3.5 h-3.5" />
-            Inventaires
-          </button>
-        </div>
-      </div>
-
-      {mode === 'inventaire' ? (
-        /* INVENTAIRE VIEW (Modern Sleek Aesthetic) */
-        <div className="flex-1 flex flex-col gap-4 min-h-0 px-6 pb-6 z-10 animate-in fade-in duration-500">
-          <div className="bg-white rounded-3xl border border-[#d5e2ea] p-6 shadow-sm shrink-0 flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-[#11b5a2] rounded-xl flex items-center justify-center text-white shadow-lg shadow-[#11b5a2]/20">
-                  <Package className="w-6 h-6" />
-                </div>
-                <div className="flex flex-col">
-                  <h1 className="text-xl font-black text-slate-800 tracking-tight leading-tight">
-                    {activeTab === 'boxes' ? 'Gestion de l\'Inventaire' : 'Stock Instruments'}
-                  </h1>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                    {activeTab === 'boxes' ? 'Suivi et traçabilité des boîtes' : 'Instruments en circulation'}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex bg-slate-50 border-2 border-[#d5e2ea] rounded-2xl items-center px-4 py-2 w-96 transition-all focus-within:border-[#11b5a2] focus-within:bg-white ml-4 group">
-                <Search className="w-4 h-4 text-slate-400 mr-2 group-focus-within:text-[#11b5a2] transition-colors" />
-                <input 
-                  type="text" 
-                  placeholder={activeTab === 'boxes' ? "Scanner code-barres ou rechercher..." : "Scanner instrument..."}
-                  className="bg-transparent text-sm font-medium focus:outline-none w-full"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={handleScan}
-                />
-                {searchQuery && (
-                  <button 
-                    onClick={() => setSearchQuery("")}
-                    className="ml-2 text-slate-300 hover:text-slate-500 transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-
+    <div className="h-full flex flex-col text-foreground overflow-hidden">
+      {/* INVENTAIRE VIEW */}
+      <div className="flex-1 flex flex-col gap-4 min-h-0 p-4">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm shrink-0 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
-              <div className="flex bg-[#f4f8fb] p-1 rounded-xl border border-[#d5e2ea]/50 mr-4">
-                <button 
-                  onClick={() => { setActiveTab("boxes"); setSelectedBox(null); setSelectedInstrument(null); }}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === "boxes" ? 'bg-white text-[#11b5a2] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                >
-                  <Package className="w-3.5 h-3.5" />
-                  Boîtes
-                </button>
-                <button 
-                  onClick={() => { setActiveTab("instruments"); setSelectedBox(null); setSelectedInstrument(null); }}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === "instruments" ? 'bg-white text-[#11b5a2] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                >
-                  <Wrench className="w-3.5 h-3.5" />
-                  Instruments
-                </button>
+              <div className="size-9 bg-secondary rounded-lg flex items-center justify-center text-secondary-foreground">
+                <Package className="size-5" />
               </div>
-              
-              <button className="px-6 py-2.5 bg-[#11b5a2] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-[#0f9a8a] transition-all flex items-center gap-2 shadow-lg shadow-[#11b5a2]/20">
-                <Plus className="w-4 h-4" />
-                Ajouter
-              </button>
-              <button className="px-4 py-2.5 bg-white border-2 border-[#d5e2ea] rounded-xl text-[11px] font-bold text-slate-500 hover:bg-slate-50 transition-all">
-                <Filter className="w-4 h-4" />
-              </button>
+              <div className="flex flex-col">
+                <h1 className="text-base font-semibold text-foreground">Gestion de l&apos;Inventaire</h1>
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Suivi et traçabilité des boîtes</p>
+              </div>
+            </div>
+
+            <div className="relative ml-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder={activeTab === 'boxes' ? "Scanner code-barres ou rechercher…" : "Scanner instrument…"}
+                className="w-80 rounded-lg border border-border bg-muted pl-9 pr-9 py-2.5 text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none focus:border-primary focus:bg-card"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleScan}
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <X className="size-3.5" />
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="flex-1 flex gap-6 min-h-0 overflow-hidden">
-            <div className="flex-1 bg-white rounded-3xl border border-[#d5e2ea] shadow-sm overflow-hidden flex flex-col min-h-0">
-              <div className="flex-1 overflow-y-auto custom-scrollbar">
-                {activeTab === "boxes" ? (
-                  <table className="w-full text-left table-fixed border-separate border-spacing-0">
-                    <thead className="sticky top-0 z-10 bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                      <tr>
-                        <th className="px-8 py-5 border-b border-[#d5e2ea]">Code-Barres</th>
-                        <th className="px-8 py-5 border-b border-[#d5e2ea]">Modèle & Type</th>
-                        <th className="px-8 py-5 border-b border-[#d5e2ea]">Statut Actuel</th>
-                        <th className="px-8 py-5 border-b border-[#d5e2ea]">Localisation</th>
-                        <th className="px-8 py-5 border-b border-[#d5e2ea] text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredInventaireBoxes.map((box) => (
-                        <tr 
-                          key={box.id} 
-                          onClick={() => { setSelectedBox(box); setIsBoxDetailsModalOpen(true); }} 
-                          className={`hover:bg-slate-50/80 cursor-pointer transition-all ${selectedBox?.id === box.id ? 'bg-[#f0f9ff]' : ''}`}
-                        >
-                          <td className="px-8 py-4 font-mono text-[11px] font-bold text-slate-400">{box.barcode}</td>
-                          <td className="px-8 py-4">
-                            <div className="flex flex-col">
-                              <span className="text-sm font-black text-slate-800">{box.name}</span>
-                              <span className="text-[10px] font-bold text-[#11b5a2] uppercase">{box.category}</span>
-                            </div>
+          <div className="flex items-center gap-3">
+            <div className="flex rounded-lg border border-border bg-muted p-1 gap-1">
+              <button
+                onClick={() => { setActiveTab("boxes"); setSelectedBox(null); setSelectedInstrument(null); }}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${activeTab === "boxes" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Package className="size-3.5" />
+                Boîtes
+              </button>
+              <button
+                onClick={() => { setActiveTab("instruments"); setSelectedBox(null); setSelectedInstrument(null); }}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${activeTab === "instruments" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Wrench className="size-3.5" />
+                Instruments
+              </button>
+            </div>
+
+            <button className="interactive-secondary flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-medium uppercase tracking-wide">
+              <Plus className="size-4" />
+              Ajouter
+            </button>
+            <button className="interactive-muted flex items-center justify-center size-9 rounded-lg">
+              <Filter className="size-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="h-full rounded-xl border border-border bg-card shadow-sm overflow-hidden flex flex-col">
+            <div className="flex-1 overflow-y-auto">
+              {activeTab === "boxes" ? (
+                <table className="w-full min-w-[800px] text-left border-collapse">
+                  <thead className="sticky top-0 z-10 bg-card border-b border-border">
+                    <tr>
+                      <th className="px-6 py-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Code-Barres</th>
+                      <th className="px-6 py-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Modèle &amp; Type</th>
+                      <th className="px-6 py-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Statut Actuel</th>
+                      <th className="px-6 py-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Localisation</th>
+                      <th className="px-6 py-3 text-right text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Instruments</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredInventaireBoxes.map((box) => {
+                      const instruments: any[] = box.composition ?? [];
+                      return (
+                        <tr key={box.id} className="transition-colors hover:bg-muted border-b border-border">
+                          <td className="px-6 py-4 font-mono text-xs font-medium text-muted-foreground">{box.barcode}</td>
+                          <td className="px-6 py-4">
+                            <p className="text-sm font-semibold text-foreground">{box.name}</p>
+                            <p className="text-[10px] font-medium text-secondary uppercase">{box.category}</p>
                           </td>
-                          <td className="px-8 py-4">
-                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tight ${
-                              box.status === 'Prêt' || box.status === 'Stérile' ? 'bg-[#eafaf7] text-[#11b5a2] border border-[#bdece4]' : 
-                              box.status === 'Sale' ? 'bg-orange-50 text-orange-500 border border-orange-100' : 
-                              'bg-slate-100 text-slate-400 border border-slate-200'
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-medium uppercase ${
+                              box.status === 'Prêt' || box.status === 'Stérile'
+                                ? 'border border-secondary/20 bg-secondary-muted text-secondary'
+                                : box.status === 'Sale'
+                                  ? 'border border-warning/20 bg-warning-muted text-warning'
+                                  : 'border border-border bg-muted text-muted-foreground'
                             }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${
-                                box.status === 'Prêt' || box.status === 'Stérile' ? 'bg-[#11b5a2]' : 
-                                box.status === 'Sale' ? 'bg-orange-500' : 'bg-slate-400'
+                              <span className={`size-1.5 rounded-full ${
+                                box.status === 'Prêt' || box.status === 'Stérile' ? 'bg-secondary' :
+                                box.status === 'Sale' ? 'bg-warning' : 'bg-muted-foreground'
                               }`} />
                               {box.status === 'Prêt' ? 'Stérile' : box.status}
                             </span>
                           </td>
-                          <td className="px-8 py-4">
-                            <div className="flex items-center gap-2 text-slate-500 font-bold text-xs">
-                              <span className="text-[#1378ac]">📍</span>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-1.5 text-muted-foreground text-xs font-medium">
+                              <MapPin className="size-3 text-primary" />
                               {box.location}
                             </div>
                           </td>
-                          <td className="px-8 py-4 text-right">
-                            <button className="p-2 hover:bg-white rounded-lg transition-all text-slate-300 hover:text-[#11b5a2]">
-                              <ChevronRight className="w-5 h-5" />
+                          <td className="px-6 py-4 text-right">
+                            <button
+                              onClick={() => setInstrumentsPopupBox(box)}
+                              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+                            >
+                              <span className="text-[10px] font-medium text-muted-foreground">{instruments.length} items</span>
+                              <ChevronDown className="size-4 text-muted-foreground" />
                             </button>
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <table className="w-full text-left table-fixed border-separate border-spacing-0">
-                    <thead className="sticky top-0 z-10 bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                      <tr>
-                        <th className="px-8 py-5 border-b border-[#d5e2ea]">ID Unique</th>
-                        <th className="px-8 py-5 border-b border-[#d5e2ea]">Désignation</th>
-                        <th className="px-8 py-5 border-b border-[#d5e2ea]">État</th>
-                        <th className="px-8 py-5 border-b border-[#d5e2ea]">Boîte Assignée</th>
-                        <th className="px-8 py-5 border-b border-[#d5e2ea] text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {filteredInventaireInstruments.map((inst) => (
-                          <tr 
-                            key={inst.id} 
-                            onClick={() => { setSelectedInstrument(inst); setIsTraceabilityModalOpen(true); }} 
-                            className={`hover:bg-slate-50/80 cursor-pointer transition-all ${selectedInstrument?.id === inst.id ? 'bg-[#f0f9ff]' : ''}`}
-                          >
-                          <td className="px-8 py-4 font-mono text-[11px] font-bold text-slate-400">{inst.id}</td>
-                          <td className="px-8 py-4">
-                            <div className="flex flex-col">
-                              <span className="text-sm font-black text-slate-800">{inst.name}</span>
-                              <span className="text-[10px] font-bold text-slate-400 uppercase">Modèle: {inst.model}</span>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <table className="w-full min-w-[800px] text-left border-collapse">
+                  <thead className="sticky top-0 z-10 bg-card border-b border-border">
+                    <tr>
+                      <th className="px-6 py-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">ID Unique</th>
+                      <th className="px-6 py-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Désignation</th>
+                      <th className="px-6 py-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">État</th>
+                      <th className="px-6 py-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Boîte Assignée</th>
+                      <th className="px-6 py-3 text-right text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredInventaireInstruments.map((inst) => (
+                      <tr
+                        key={inst.id}
+                        onClick={() => { setSelectedInstrument(inst); setIsTraceabilityModalOpen(true); }}
+                        className={`cursor-pointer transition-colors hover:bg-muted ${selectedInstrument?.id === inst.id ? 'bg-primary-muted' : ''}`}
+                      >
+                        <td className="px-6 py-4 font-mono text-xs font-medium text-muted-foreground">{inst.id}</td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm font-semibold text-foreground">{inst.name}</p>
+                          <p className="text-[10px] font-medium text-muted-foreground uppercase">Modèle: {inst.model}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-medium uppercase ${
+                            inst.status === 'En Stock'
+                              ? 'border border-secondary/20 bg-secondary-muted text-secondary'
+                              : inst.status === 'Sale'
+                                ? 'border border-warning/20 bg-warning-muted text-warning'
+                                : inst.status === 'En Maintenance'
+                                  ? 'border border-destructive/20 bg-destructive/5 text-destructive'
+                                  : 'border border-border bg-muted text-muted-foreground'
+                          }`}>
+                            <span className={`size-1.5 rounded-full ${
+                              inst.status === 'En Stock' ? 'bg-secondary' :
+                              inst.status === 'Sale' ? 'bg-warning' :
+                              inst.status === 'En Maintenance' ? 'bg-destructive' : 'bg-muted-foreground'
+                            }`} />
+                            {inst.status === 'En Stock' ? 'Stérile' : inst.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {inst.parentBoxName ? (
+                            <div className="flex items-center gap-2">
+                              <Package className="size-3 text-muted-foreground shrink-0" />
+                              <div>
+                                <p className="text-xs font-semibold text-foreground">{inst.parentBoxName}</p>
+                                <p className="font-mono text-[10px] font-medium text-muted-foreground">{inst.parentBox ?? "—"}</p>
+                              </div>
                             </div>
-                          </td>
-                          <td className="px-8 py-4">
-                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tight ${
-                              inst.status === 'En Stock' || inst.status === 'Stérile' ? 'bg-[#eafaf7] text-[#11b5a2] border border-[#bdece4]' : 
-                              inst.status === 'Sale' ? 'bg-orange-50 text-orange-500 border border-orange-100' : 
-                              inst.status === 'En Maintenance' ? 'bg-red-50 text-red-500 border border-red-100' :
-                              'bg-slate-100 text-slate-400 border border-slate-200'
-                            }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${
-                                inst.status === 'En Stock' || inst.status === 'Stérile' ? 'bg-[#11b5a2]' : 
-                                inst.status === 'Sale' ? 'bg-orange-500' : 
-                                inst.status === 'En Maintenance' ? 'bg-red-500' : 'bg-slate-400'
-                              }`} />
-                              {inst.status === 'En Stock' ? 'Stérile' : inst.status}
-                            </span>
-                          </td>
-                          <td className="px-8 py-4">
-                            {inst.parentBoxName ? (
-                              <div className="flex items-center gap-2 text-slate-600 font-bold text-xs">
-                                <span className="p-1 bg-slate-100 rounded">📦</span>
-                                {inst.parentBoxName}
-                              </div>
-                            ) : (
-                              <span className="text-slate-300 italic text-xs">Non assigné</span>
-                            )}
-                          </td>
-                          <td className="px-8 py-4 text-right">
-                            <button className="p-2 hover:bg-white rounded-lg transition-all text-slate-300 hover:text-[#11b5a2]">
-                              <ChevronRight className="w-5 h-5" />
+                          ) : (
+                            <span className="text-muted-foreground italic text-xs">Non assigné</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openReassignModal(inst); }}
+                              className="interactive-muted p-1.5 rounded-lg"
+                              title="Réassigner à une autre boîte"
+                            >
+                              <ArrowRightLeft className="size-3.5" />
                             </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+                            <button className="interactive-muted p-1.5 rounded-lg">
+                              <ChevronRight className="size-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
-
-            {/* Inventory Side Panel removed, replaced by Modal below */}
           </div>
         </div>
-      ) : (
-        /* CATALOGUE VIEW (Based on image_a5fc43.png & image_a60022.png) */
-        <div className="flex-1 flex flex-col gap-4 min-h-0 overflow-hidden z-10 animate-in fade-in duration-500">
-          {/* Main Catalog Header */}
-          <div className="bg-white rounded-3xl border border-[#d5e2ea] p-6 shadow-sm shrink-0 flex items-center justify-between mx-6">
-            <div className="flex items-center gap-6">
+      </div>
+
+      {/* Instruments Popup Modal */}
+      {instrumentsPopupBox && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <button type="button" onClick={() => setInstrumentsPopupBox(null)} className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" />
+          <div className="relative z-[101] bg-card w-full max-w-md rounded-xl border border-border shadow-sm overflow-hidden flex flex-col max-h-[70vh] animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted shrink-0">
+              <div>
+                <p className="text-sm font-semibold text-foreground">{instrumentsPopupBox.name}</p>
+                <p className="font-mono text-[10px] font-medium text-muted-foreground mt-0.5">{instrumentsPopupBox.barcode}</p>
+              </div>
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-[#11b5a2] rounded-xl flex items-center justify-center text-white text-xl shadow-lg shadow-[#11b5a2]/20">📷</div>
-                <div className="flex flex-col">
-                  <h1 className="text-xl font-black text-slate-800 tracking-tight leading-tight">Catalogue Chirurgical</h1>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Référentiel des boîtes d'instruments</p>
-                </div>
-              </div>
-              <div className="flex bg-slate-50 border-2 border-[#d5e2ea] rounded-2xl items-center px-4 py-2 w-96 transition-all focus-within:border-[#11b5a2] focus-within:bg-white ml-4">
-                <span className="text-slate-400 mr-2 text-lg">🔍</span>
-                <input 
-                  type="text" 
-                  placeholder={activeTab === 'boxes' ? "Rechercher une boite..." : "Search instruments..."} 
-                  className="bg-transparent text-sm font-medium focus:outline-none w-full" 
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="relative group">
-                <button className="px-6 py-2.5 bg-white border-2 border-[#d5e2ea] rounded-xl text-[11px] font-bold text-slate-500 hover:bg-slate-50 transition-all flex items-center gap-2">
-                  {selectedSpecialty === "Toutes" ? "Toutes les spécialités" : selectedSpecialty} <span className="opacity-50 text-[8px]">▼</span>
+                <span className="text-[10px] font-medium text-muted-foreground">{(instrumentsPopupBox.composition ?? []).length} instruments</span>
+                <button onClick={() => setInstrumentsPopupBox(null)} className="interactive-muted size-8 flex items-center justify-center rounded-lg">
+                  <X className="size-4" />
                 </button>
-                <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-2xl border border-[#d5e2ea] shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all z-50 overflow-hidden">
-                  {["Toutes", "ORTHO", "NEURO", "CARDIO", "DIGESTIF", "GENERAL"].map((spec) => (
-                    <button 
-                      key={spec}
-                      onClick={() => setSelectedSpecialty(spec)}
-                      className={`w-full px-6 py-3 text-left text-[11px] font-bold transition-colors ${selectedSpecialty === spec ? 'bg-[#1378ac] text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-                    >
-                      {spec === "Toutes" ? "Toutes les spécialités" : spec}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <button className="px-6 py-2.5 bg-white border-2 border-[#d5e2ea] rounded-xl text-[11px] font-bold text-slate-500 hover:bg-slate-50 transition-all flex items-center gap-2">
-                ▼ Filtres
-              </button>
-              <div className="flex items-center gap-3 ml-6 border-l border-slate-200 pl-6">
-                 <div className="flex flex-col items-end">
-                    <span className="text-[11px] font-black text-slate-800">Dr. Marti</span>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase">Bloc 4</span>
-                 </div>
-                 <div className="h-10 w-10 rounded-full bg-[#f4f8fb] border-2 border-white shadow-md overflow-hidden flex items-center justify-center font-black text-slate-400 text-xs">DM</div>
               </div>
             </div>
-          </div>
-
-          <div className="flex-1 flex gap-6 min-h-0 overflow-hidden px-6 pb-6">
-            {/* Sidebar for Instruments */}
-            {activeTab === 'instruments' && (
-              <div className="w-64 bg-white rounded-3xl border border-[#d5e2ea] p-6 shadow-sm flex flex-col gap-8 shrink-0 animate-in slide-in-from-left duration-500">
-                <div className="space-y-4">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Family</h4>
-                  <div className="flex flex-col gap-1">
-                    {["Préhension (42)", "Écarteurs (28)", "Coupe (15)", "Suture (24)"].map((cat, i) => (
-                      <label key={i} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-xl cursor-pointer group transition-all">
-                        <input type="checkbox" className="w-4 h-4 rounded-md border-2 border-[#d5e2ea] text-[#11b5a2] focus:ring-[#11b5a2]" />
-                        <span className="text-xs font-bold text-slate-600 group-hover:text-slate-900">{cat}</span>
-                      </label>
-                    ))}
-                  </div>
+            <div className="flex-1 overflow-y-auto divide-y divide-border">
+              {(instrumentsPopupBox.composition ?? []).length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+                  <Wrench className="size-8 opacity-30" />
+                  <p className="text-[10px] font-medium uppercase tracking-wide">Aucun instrument enregistré</p>
                 </div>
-                <div className="space-y-4">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Specialty</h4>
-                  <div className="flex flex-col gap-1">
-                    {["Viscéral", "Orthopédie", "Gynécologie"].map((spec, i) => (
-                      <label key={i} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-xl cursor-pointer group transition-all">
-                        <input type="checkbox" className="w-4 h-4 rounded-md border-2 border-[#d5e2ea] text-[#11b5a2] focus:ring-[#11b5a2]" />
-                        <span className="text-xs font-bold text-slate-600 group-hover:text-slate-900">{spec}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Main Content Area */}
-            <div className={`flex-1 overflow-hidden transition-all flex flex-col px-6 pb-6`}>
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-4">
-                  <h2 className="text-xl font-black text-slate-800 tracking-tight">
-                    {activeTab === 'boxes' ? 'Boites Disponibles' : 'Instrument Catalog'}
-                    <span className="ml-3 text-xs font-bold text-slate-400">{activeTab === 'boxes' ? referentielBoxes.length : referentielInstruments.length} résultats trouvés</span>
-                  </h2>
-                  <div className="flex bg-[#f4f8fb] p-1 rounded-xl border border-[#d5e2ea]/50 scale-90 origin-left">
-                    <TabBtn active={activeTab === "boxes"} label="Boîtes" icon="📦" onClick={() => { setActiveTab("boxes"); setSelectedBox(null); setSelectedInstrument(null); }} />
-                    <TabBtn active={activeTab === "instruments"} label="Instruments" icon="🔧" onClick={() => { setActiveTab("instruments"); setSelectedBox(null); setSelectedInstrument(null); }} />
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Trier par:</span>
-                    <select className="bg-transparent text-[10px] font-black text-slate-800 focus:outline-none uppercase">
-                      <option>Plus récentes</option>
-                      <option>Nom A-Z</option>
-                    </select>
-                  </div>
-                  <button 
-                    onClick={() => setIsConfigMode(!isConfigMode)}
-                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${isConfigMode ? 'bg-[#11b5a2] text-white shadow-lg' : 'bg-white border-2 border-slate-200 text-slate-400 hover:border-[#11b5a2] hover:text-[#11b5a2]'}`}
-                  >
-                    {isConfigMode ? '✓ Terminer Config' : '⚙ Configurer'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Responsive Data Table */}
-              <div className="flex-1 bg-white rounded-3xl border border-[#d5e2ea] shadow-sm overflow-hidden flex flex-col">
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
-                  {activeTab === "boxes" ? (
-                    <table className="w-full text-left table-fixed border-separate border-spacing-0">
-                      <thead className="sticky top-0 z-10 bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                        <tr>
-                          <th className="w-16 px-6 py-5 border-b border-[#d5e2ea]">
-                            <input 
-                              type="checkbox" 
-                              className="w-4 h-4 rounded border-[#d5e2ea] text-[#11b5a2] focus:ring-[#11b5a2]"
-                              checked={selectedRows.length === referentielBoxes.length}
-                              onChange={() => {
-                                if (selectedRows.length === referentielBoxes.length) setSelectedRows([]);
-                                else setSelectedRows(referentielBoxes.map(b => b.id));
-                              }}
-                            />
-                          </th>
-                          <th className="w-32 px-6 py-5 border-b border-[#d5e2ea]">Type</th>
-                          <th className="px-6 py-5 border-b border-[#d5e2ea]">Nom de la Boîte</th>
-                          <th className="w-40 px-6 py-5 border-b border-[#d5e2ea]">Référence</th>
-                          <th className="w-32 px-6 py-5 border-b border-[#d5e2ea]">Instruments</th>
-                          <th className="w-40 px-6 py-5 border-b border-[#d5e2ea]">Dernière MÀJ</th>
-                          <th className="w-44 px-6 py-5 border-b border-[#d5e2ea] text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {filteredCatalogBoxes.map((box) => (
-                          <tr 
-                            key={box.id} 
-                            onClick={() => { setDatasheetBox(box); setIsDatasheetModalOpen(true); }}
-                            className={`hover:bg-slate-50 cursor-pointer transition-all ${selectedBox?.id === box.id ? 'bg-[#f0f9ff]' : 'odd:bg-white even:bg-[#fbfcfd]'}`}
-                          >
-                            <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                              <input 
-                                type="checkbox" 
-                                className="w-4 h-4 rounded border-[#d5e2ea] text-[#11b5a2] focus:ring-[#11b5a2]" 
-                                checked={selectedRows.includes(box.id)}
-                                onChange={() => {
-                                  if (selectedRows.includes(box.id)) setSelectedRows(selectedRows.filter(id => id !== box.id));
-                                  else setSelectedRows([...selectedRows, box.id]);
-                                }}
-                              />
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className={`px-2 py-1 rounded-md text-[9px] font-black tracking-widest ${
-                                box.category === 'ORTHO' ? 'bg-[#eafaf7] text-[#11b5a2] border border-[#bdece4]' :
-                                box.category === 'NEURO' ? 'bg-[#edf5f9] text-[#1378ac] border border-[#d5e2ea]' :
-                                box.category === 'CARDIO' ? 'bg-red-50 text-red-500 border border-red-100' :
-                                'bg-slate-50 text-slate-500 border border-slate-200'
-                              }`}>
-                                {box.category}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="text-sm font-black text-slate-800 line-clamp-1">{box.name}</span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="font-mono text-[10px] font-bold text-slate-400 uppercase tracking-widest">{box.ref}</span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-black text-slate-700">{box.instrumentsCount}</span>
-                                <span className="text-[10px] font-bold text-slate-400">items</span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2 text-slate-400 text-[10px] font-bold">
-                                <Calendar className="w-3 h-3" />
-                                24/03/2026
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-end gap-1">
-                                <button 
-                                  onClick={() => handleEditItem(box)}
-                                  className="p-2 hover:bg-[#edf5f9] rounded-lg transition-all text-slate-400 hover:text-[#1378ac] group" 
-                                  title="Éditer"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
-                                <button className="p-2 hover:bg-[#edf5f9] rounded-lg transition-all text-slate-400 hover:text-[#1378ac] group" title="Imprimer">
-                                  <Printer className="w-4 h-4" />
-                                </button>
-                                <button 
-                                  onClick={() => { setDatasheetBox(box); setIsDatasheetModalOpen(true); }}
-                                  className="p-2 hover:bg-[#eafaf7] rounded-lg transition-all text-slate-400 hover:text-[#11b5a2] group" 
-                                  title="Fiche Technique"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <table className="w-full text-left table-fixed border-separate border-spacing-0">
-                      {/* Similar Table for Instruments if needed, but the prompt emphasizes Boxes */}
-                      <thead className="sticky top-0 z-10 bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                        <tr>
-                          <th className="w-16 px-6 py-5 border-b border-[#d5e2ea]">
-                            <input type="checkbox" className="w-4 h-4 rounded border-[#d5e2ea] text-[#11b5a2] focus:ring-[#11b5a2]" />
-                          </th>
-                          <th className="w-32 px-6 py-5 border-b border-[#d5e2ea]">Type</th>
-                          <th className="px-6 py-5 border-b border-[#d5e2ea]">Désignation</th>
-                          <th className="w-40 px-6 py-5 border-b border-[#d5e2ea]">Référence</th>
-                          <th className="w-40 px-6 py-5 border-b border-[#d5e2ea]">Matériau</th>
-                          <th className="w-44 px-6 py-5 border-b border-[#d5e2ea] text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {filteredCatalogInstruments.map((inst) => (
-                          <tr 
-                            key={inst.id} 
-                            onClick={() => { setSelectedCatalogueInstrument(inst); setIsInstrumentDetailsModalOpen(true); }}
-                            className="hover:bg-slate-50 transition-all odd:bg-white even:bg-[#fbfcfd] cursor-pointer"
-                          >
-                            <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                              <input type="checkbox" className="w-4 h-4 rounded border-[#d5e2ea] text-[#11b5a2] focus:ring-[#11b5a2]" />
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="px-2 py-1 bg-slate-100 text-slate-500 rounded-md text-[9px] font-black tracking-widest border border-slate-200 uppercase">
-                                {inst.category}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex flex-col">
-                                <span className="text-sm font-black text-slate-800">{inst.name}</span>
-                                <span className="text-[10px] font-bold text-slate-400 line-clamp-1">{inst.description}</span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="font-mono text-[10px] font-bold text-slate-400 uppercase tracking-widest">{inst.ref}</span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="text-[10px] font-bold text-slate-600">{inst.material}</span>
-                            </td>
-                            <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-end gap-1">
-                                <button 
-                                  onClick={() => handleEditItem(inst)}
-                                  className="p-2 hover:bg-[#edf5f9] rounded-lg transition-all text-slate-400 hover:text-[#1378ac] group"
-                                  title="Éditer"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
-                                <button className="p-2 hover:bg-[#edf5f9] rounded-lg transition-all text-slate-400 hover:text-[#1378ac]"><Printer className="w-4 h-4" /></button>
-                                <button 
-                                  onClick={() => { setSelectedCatalogueInstrument(inst); setIsInstrumentDetailsModalOpen(true); }}
-                                  className="p-2 hover:bg-[#eafaf7] rounded-lg transition-all text-slate-400 hover:text-[#11b5a2]"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Datasheet Modal */}
-      {isDatasheetModalOpen && datasheetBox && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#0b4867]/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300 border border-white/20 flex flex-col max-h-[90vh]">
-            {/* Modal Header */}
-            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-[#fbfcfd]">
-              <span className={`px-3 py-1 rounded-lg text-[10px] font-black tracking-widest uppercase ${
-                datasheetBox.category === 'ORTHO' ? 'bg-[#eafaf7] text-[#11b5a2] border border-[#bdece4]' :
-                datasheetBox.category === 'NEURO' ? 'bg-[#edf5f9] text-[#1378ac] border border-[#d5e2ea]' :
-                'bg-slate-100 text-slate-500 border border-slate-200'
-              }`}>
-                {datasheetBox.category}
-              </span>
-              <button 
-                onClick={() => setIsDatasheetModalOpen(false)}
-                className="h-10 w-10 flex items-center justify-center rounded-xl bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-10">
-              <div className="flex flex-col items-center text-center mb-12">
-                <div className="h-32 w-32 bg-[#f8fbfd] rounded-[2.5rem] flex items-center justify-center text-6xl shadow-inner border border-slate-50 mb-6 relative group">
-                  <span className="group-hover:scale-110 transition-transform duration-500">📦</span>
-                </div>
-                <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-2 uppercase">{datasheetBox.name}</h2>
-                <div className="inline-flex items-center gap-2 px-5 py-2 bg-slate-100 rounded-full text-[11px] font-black text-slate-500 tracking-[0.25em]">
-                  REF: {datasheetBox.ref}
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Composition Technique</h4>
-                  <span className="text-[10px] font-black text-[#11b5a2] uppercase tracking-widest bg-[#eafaf7] px-3 py-1 rounded-lg border border-[#bdece4]">
-                    {datasheetBox.instrumentsCount} instruments au total
-                  </span>
-                </div>
-
-                <div className="divide-y divide-slate-100 bg-slate-50/50 rounded-3xl border border-slate-100 overflow-hidden">
-                  {datasheetBox.composition?.map((item: any, idx: number) => (
-                    <div key={idx} className="flex items-center justify-between p-5 hover:bg-white transition-all group">
-                      <div className="flex items-center gap-4">
-                        <div className="h-2 w-2 rounded-full bg-[#11b5a2]/30 group-hover:bg-[#11b5a2] transition-colors" />
-                        <div className="flex flex-col">
-                          <span className="text-sm font-black text-slate-700 group-hover:text-[#0b4867] transition-colors">{item.name}</span>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Référence : {item.ref}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="px-4 py-2 bg-white rounded-xl border border-slate-200 shadow-sm text-xs font-black text-[#11b5a2] min-w-[60px] text-center">
-                          x {item.quantity}
-                        </div>
-                      </div>
+              ) : (
+                (instrumentsPopupBox.composition ?? []).map((inst: any, idx: number) => (
+                  <div key={idx} className="flex items-center gap-3 px-5 py-3 hover:bg-muted transition-colors">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted border border-border">
+                      <Wrench className="size-3.5 text-muted-foreground" />
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-8 bg-[#fbfcfd] border-t border-slate-100">
-              <button 
-                onClick={() => {
-                  alert(`Impression de la fiche technique: ${datasheetBox.name}`);
-                  setIsDatasheetModalOpen(false);
-                }}
-                className="w-full py-5 bg-[#11b5a2] text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg shadow-[#11b5a2]/20 hover:bg-[#0f9a8a] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
-              >
-                <Printer className="w-5 h-5" />
-                IMPRIMER LA FICHE TECHNIQUE
-              </button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-foreground truncate">{inst.name}</p>
+                      <p className="font-mono text-[10px] font-medium text-muted-foreground mt-0.5">{inst.barcode ?? inst.id ?? inst.serialNumber ?? "—"}</p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -783,31 +376,32 @@ export function InventoryManagement() {
 
       {/* Conflict Modal */}
       {showConflictModal.show && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#0b4867]/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300 border border-white/20">
-            <div className={`p-8 text-white flex items-center gap-4 ${showConflictModal.type === 'orange' ? 'bg-orange-500' : 'bg-[#d6455d]'}`}>
-              <div className="h-14 w-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
-                {showConflictModal.type === 'orange' ? <ShieldAlert className="w-8 h-8" /> : <AlertTriangle className="w-8 h-8" />}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <button type="button" onClick={() => setShowConflictModal({show: false, type: 'orange', message: ''})} className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" />
+          <div className="relative z-[101] bg-card w-full max-w-md rounded-xl border border-border shadow-sm overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className={`p-5 text-primary-foreground flex items-center gap-4 ${showConflictModal.type === 'orange' ? 'bg-warning' : 'bg-destructive'}`}>
+              <div className="size-12 bg-white/20 rounded-lg flex items-center justify-center">
+                {showConflictModal.type === 'orange' ? <ShieldAlert className="size-6" /> : <AlertTriangle className="size-6" />}
               </div>
               <div>
-                <h3 className="text-xl font-black uppercase tracking-tight leading-none">Alerte de Conflit</h3>
-                <p className="text-white/70 text-[10px] font-black uppercase tracking-[0.2em] mt-2">Validation de composition</p>
+                <h3 className="text-sm font-semibold uppercase tracking-wide">Alerte de Conflit</h3>
+                <p className="text-white/70 text-[10px] font-medium uppercase tracking-wide mt-1">Validation de composition</p>
               </div>
             </div>
-            <div className="p-8 space-y-6">
-              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                <p className="text-slate-600 font-bold leading-relaxed text-sm">{showConflictModal.message}</p>
+            <div className="p-5 space-y-4">
+              <div className="bg-muted p-4 rounded-xl border border-border">
+                <p className="text-foreground font-medium text-sm leading-relaxed">{showConflictModal.message}</p>
               </div>
               <div className="flex gap-3">
-                <button 
+                <button
                   onClick={() => setShowConflictModal({show: false, type: 'orange', message: ''})}
-                  className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-200 transition-all"
+                  className="interactive-muted flex-1 rounded-lg py-2.5 text-xs font-medium uppercase tracking-wide"
                 >Annuler</button>
-                <button 
+                <button
                   onClick={() => setShowConflictModal({show: false, type: 'orange', message: ''})}
-                  className={`flex-[2] px-8 py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all shadow-lg ${showConflictModal.type === 'orange' ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/20' : 'bg-[#d6455d] hover:bg-[#b53a4e] shadow-red-500/20'}`}
+                  className={`flex-[2] rounded-lg py-2.5 text-xs font-medium uppercase tracking-wide text-primary-foreground ${showConflictModal.type === 'orange' ? 'interactive-warning' : 'interactive-danger'}`}
                 >
-                  {showConflictModal.type === 'orange' ? 'Transférer l\'instrument' : 'Ignorer l\'alerte'}
+                  {showConflictModal.type === 'orange' ? "Transférer l'instrument" : "Ignorer l'alerte"}
                 </button>
               </div>
             </div>
@@ -815,310 +409,54 @@ export function InventoryManagement() {
         </div>
       )}
 
-      {/* Instrument Details Modal (Catalogue/Referentiel) */}
-      {isInstrumentDetailsModalOpen && selectedCatalogueInstrument && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#0b4867]/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300 border border-white/20 flex flex-col max-h-[90vh]">
-            {/* Modal Header */}
-            <div className="relative p-8 flex flex-col items-center border-b border-slate-50 bg-[#fbfcfd]">
-              <div className="absolute top-6 left-6">
-                <span className="px-4 py-1.5 bg-[#1378ac] text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">
-                  FICHE TECHNIQUE INSTRUMENT
-                </span>
-              </div>
-              <button 
-                onClick={() => { setIsInstrumentDetailsModalOpen(false); setSelectedCatalogueInstrument(null); }}
-                className="absolute top-6 right-6 h-10 w-10 flex items-center justify-center rounded-xl bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all"
-              >
-                <X className="w-6 h-6" />
-              </button>
-
-              <div className="h-40 w-full bg-white rounded-[2rem] flex items-center justify-center mt-8 border border-slate-50 shadow-inner relative group overflow-hidden">
-                <div className="text-7xl transition-all duration-700 group-hover:scale-110 drop-shadow-lg grayscale-[0.2] group-hover:grayscale-0">
-                  🔧
-                </div>
-              </div>
-
-              <div className="mt-8 text-center space-y-2">
-                <h2 className="text-3xl font-black text-[#0b4867] tracking-tight uppercase">
-                  {selectedCatalogueInstrument.name}
-                </h2>
-                <div className="inline-flex px-4 py-1.5 bg-slate-100 rounded-full">
-                  <span className="font-mono text-[11px] font-black text-slate-400 uppercase tracking-widest">
-                    REF: {selectedCatalogueInstrument.ref}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-10 space-y-10">
-              {/* Technical Specifications Grid */}
-              <div className="grid grid-cols-2 gap-6">
-                <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 shadow-sm group hover:bg-white transition-all">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 bg-[#1378ac]/10 rounded-lg text-[#1378ac]"><Info className="w-4 h-4" /></div>
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Description</span>
-                  </div>
-                  <p className="text-sm font-bold text-slate-700 leading-relaxed">
-                    {selectedCatalogueInstrument.description || "Instrument chirurgical de haute précision, certifié pour usage hospitalier."}
-                  </p>
-                </div>
-                
-                <div className="space-y-4">
-                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex items-center justify-between">
-                    <div>
-                      <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Matériau</span>
-                      <p className="text-sm font-black text-slate-700">{selectedCatalogueInstrument.material || "Acier Inoxydable (316L)"}</p>
-                    </div>
-                    <div className="h-10 w-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-50 text-slate-400">🏗️</div>
-                  </div>
-                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex items-center justify-between">
-                    <div>
-                      <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Stérilisation</span>
-                      <p className="text-sm font-black text-slate-700">{selectedCatalogueInstrument.sterilization || "Autoclave 134°C"}</p>
-                    </div>
-                    <div className="h-10 w-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-50 text-[#11b5a2]">🛡️</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Usage in Compositions */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between px-2">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Utilisé dans les compositions :</h4>
-                  <span className="px-3 py-1 bg-[#1378ac]/10 text-[#1378ac] rounded-lg text-[10px] font-black uppercase">
-                    {selectedCatalogueInstrument.parentModels?.length || 0} Modèles de boîtes
-                  </span>
-                </div>
-                
-                <div className="grid gap-3">
-                  {selectedCatalogueInstrument.parentModels?.length > 0 ? (
-                    selectedCatalogueInstrument.parentModels.map((model: any, idx: number) => (
-                      <div key={idx} className="flex items-center justify-between p-5 bg-white border border-slate-100 rounded-3xl shadow-sm hover:shadow-md transition-all group">
-                        <div className="flex items-center gap-5">
-                          <div className="h-12 w-12 bg-slate-50 rounded-2xl flex items-center justify-center text-xl shadow-inner group-hover:bg-white transition-colors">📦</div>
-                          <div className="flex flex-col">
-                            <span className="text-sm font-black text-slate-700 group-hover:text-[#1378ac] transition-colors uppercase">{model.name}</span>
-                            <div className="flex items-center gap-3 mt-1">
-                              <span className="text-[10px] font-bold text-slate-400">REF: {model.ref || '—'}</span>
-                              <span className="h-1 w-1 rounded-full bg-slate-300"></span>
-                              <span className="text-[9px] font-black text-[#11b5a2] uppercase">{model.category}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">Quantité :</span>
-                          <span className="h-10 w-10 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center text-xs font-black text-[#1378ac] shadow-sm">
-                            {model.qty}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-10 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-                      <p className="text-xs font-bold text-slate-400 italic">Cet instrument n'est actuellement rattaché à aucun modèle de boîte.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-8 bg-[#fbfcfd] border-t border-slate-100">
-              <button 
-                onClick={() => {
-                  alert(`Impression fiche technique instrument: ${selectedCatalogueInstrument.name}`);
-                  setIsInstrumentDetailsModalOpen(false);
-                }}
-                className="w-full py-5 bg-[#1378ac] text-white rounded-2xl font-black uppercase tracking-[0.25em] text-[11px] shadow-lg shadow-[#1378ac]/20 hover:bg-[#0b4867] hover:scale-[1.01] active:scale-95 transition-all flex items-center justify-center gap-3"
-              >
-                <Printer className="w-5 h-5" />
-                IMPRIMER LA FICHE TECHNIQUE
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Box Details Modal (Inventory) */}
-      {isBoxDetailsModalOpen && selectedBox && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#0b4867]/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300 border border-white/20 flex flex-col max-h-[90vh]">
-            {/* Modal Header */}
-            <div className="relative p-8 flex flex-col items-center border-b border-slate-50 bg-[#fbfcfd]">
-              <div className="absolute top-6 left-6">
-                <span className="px-4 py-1.5 bg-[#1378ac] text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">
-                  DÉTAILS BOÎTE INVENTAIRE
-                </span>
-              </div>
-              <button 
-                onClick={() => { setIsBoxDetailsModalOpen(false); setSelectedBox(null); }}
-                className="absolute top-6 right-6 h-10 w-10 flex items-center justify-center rounded-xl bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all"
-              >
-                <X className="w-6 h-6" />
-              </button>
-
-              <div className="h-40 w-full bg-white rounded-[2rem] flex items-center justify-center mt-8 border border-slate-50 shadow-inner relative group overflow-hidden">
-                <div className="text-7xl transition-all duration-700 group-hover:scale-110 drop-shadow-lg grayscale-[0.2] group-hover:grayscale-0">
-                  📦
-                </div>
-              </div>
-
-              <div className="mt-8 text-center space-y-2">
-                <h2 className="text-3xl font-black text-[#0b4867] tracking-tight uppercase">
-                  {selectedBox.name}
-                </h2>
-                <div className="inline-flex px-4 py-1.5 bg-slate-100 rounded-full">
-                  <span className="font-mono text-[11px] font-black text-slate-400 uppercase tracking-widest">
-                    SN: {selectedBox.barcode}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-10 space-y-8">
-              {/* Status & Location Cards */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-[#f4f8fb] p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-                  <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Localisation</span>
-                  <p className="text-sm font-black text-slate-700 flex items-center gap-2">
-                    <span className="text-[#1378ac]">📍</span> {selectedBox.location}
-                  </p>
-                </div>
-                <div className="bg-[#f4f8fb] p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-                  <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Statut Actuel</span>
-                  <p className="text-sm font-black text-slate-700 flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${selectedBox.status === 'Prêt' ? 'bg-[#11b5a2]' : 'bg-orange-500'}`}></span>
-                    {selectedBox.status}
-                  </p>
-                </div>
-              </div>
-
-              {/* Progress & Alert */}
-              <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 space-y-6">
-                <div className="flex items-center justify-between text-[11px] font-black text-slate-800 uppercase tracking-widest">
-                  <span>Conformité du Contenu</span>
-                  <span className="text-[#11b5a2]">24 / 25 Instruments OK</span>
-                </div>
-                <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden shadow-inner">
-                  <div className="h-full bg-[#11b5a2] w-[96%] shadow-[0_0_15px_rgba(17,181,162,0.4)]" />
-                </div>
-                <div className="flex items-center gap-3 p-4 bg-red-50 rounded-2xl border border-red-100">
-                  <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
-                  <p className="text-xs font-bold text-red-600">1 instrument manquant par rapport au modèle théorique.</p>
-                </div>
-              </div>
-
-              {/* Composition List */}
-              <div className="space-y-4">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Composition Scannée</h4>
-                <div className="grid gap-3">
-                  {selectedBox.composition?.map((item: any, idx: number) => (
-                    <div key={idx} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl shadow-sm hover:shadow-md transition-all group">
-                      <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 bg-[#f4f8fb] rounded-xl flex items-center justify-center text-lg shadow-sm border border-slate-50 group-hover:scale-110 transition-transform">🔧</div>
-                        <div className="flex flex-col">
-                          <span className="text-sm font-black text-slate-700">{item.name}</span>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">SN: {item.barcode || 'N/A'}</span>
-                        </div>
-                      </div>
-                      <span className="px-3 py-1 bg-green-50 text-green-500 rounded-lg text-[9px] font-black uppercase border border-green-100">Vérifié</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-8 bg-[#fbfcfd] border-t border-slate-100 flex gap-4">
-              <button 
-                onClick={simulateScanToBox}
-                className="flex-1 py-5 bg-[#11b5a2] text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg shadow-[#11b5a2]/20 hover:bg-[#0f9a8a] transition-all flex items-center justify-center gap-3"
-              >
-                <Plus className="w-5 h-5" />
-                Scanner Instrument
-              </button>
-              <button 
-                onClick={handlePrint}
-                className="flex-1 py-5 bg-white border-2 border-[#1378ac] text-[#1378ac] rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] hover:bg-[#edf5f9] transition-all flex items-center justify-center gap-3"
-              >
-                <Printer className="w-5 h-5" />
-                Imprimer Fiche
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Traceability Modal */}
       {isTraceabilityModalOpen && selectedInstrument && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#0b4867]/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300 border border-white/20 flex flex-col">
-            {/* Modal Header */}
-            <div className="relative p-8 flex flex-col items-center">
-              <div className="absolute top-6 left-6">
-                <span className="px-4 py-1.5 bg-[#1378ac] text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">
-                  TRAÇABILITÉ INSTRUMENT
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <button type="button" onClick={() => { setIsTraceabilityModalOpen(false); setSelectedInstrument(null); }} className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" />
+          <div className="relative z-[101] bg-card w-full max-w-lg rounded-xl border border-border shadow-sm overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="relative p-5 flex flex-col items-center border-b border-border bg-muted">
+              <div className="absolute top-4 left-4">
+                <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary-muted px-3 py-1 text-[10px] font-medium text-primary uppercase tracking-wide">
+                  Traçabilité instrument
                 </span>
               </div>
-              <button 
+              <button
                 onClick={() => { setIsTraceabilityModalOpen(false); setSelectedInstrument(null); }}
-                className="absolute top-6 right-6 text-slate-300 hover:text-slate-500 transition-colors"
+                className="interactive-muted absolute top-4 right-4 size-8 flex items-center justify-center rounded-lg"
               >
-                <X className="w-6 h-6" />
+                <X className="size-4" />
               </button>
 
-              {/* Main Illustration */}
-              <div className="h-56 w-full bg-[#f8fbfd]/50 rounded-[2rem] flex items-center justify-center mt-8 border border-slate-50 shadow-inner overflow-hidden relative group">
-                <div className="text-8xl transition-all duration-700 group-hover:scale-110 drop-shadow-xl grayscale-[0.2] group-hover:grayscale-0">
-                  🔧
-                </div>
+              <div className="size-24 bg-card rounded-xl flex items-center justify-center mt-10 border border-border">
+                <Wrench className="size-12 text-muted-foreground" />
               </div>
 
-              {/* Title & SN */}
-              <div className="mt-8 text-center space-y-3">
-                <h2 className="text-3xl font-black text-[#0b4867] tracking-tight">
-                  {selectedInstrument.name}
-                </h2>
-                <div className="inline-flex px-4 py-1 bg-slate-50 rounded-lg">
-                  <span className="font-mono text-[11px] font-black text-slate-400 uppercase tracking-widest">
-                    SN: {selectedInstrument.id}
-                  </span>
+              <div className="mt-5 text-center space-y-2">
+                <h2 className="text-xl font-semibold text-foreground">{selectedInstrument.name}</h2>
+                <div className="inline-flex px-3 py-1 bg-muted rounded-lg">
+                  <span className="font-mono text-xs font-medium text-muted-foreground uppercase">SN: {selectedInstrument.id}</span>
                 </div>
               </div>
             </div>
 
-            {/* Modal Body: Cards */}
-            <div className="px-8 pb-8 space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-[#f4f8fb] p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all group">
-                  <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 group-hover:text-[#1378ac] transition-colors">Localisation</span>
-                  <p className="text-sm font-black text-slate-700">
-                    {selectedInstrument.parentBoxName || "Non assigné"}
-                  </p>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-muted p-4 rounded-xl border border-border">
+                  <span className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Localisation</span>
+                  <p className="text-sm font-semibold text-foreground">{selectedInstrument.parentBoxName || "Non assigné"}</p>
                 </div>
-                <div className="bg-[#f4f8fb] p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all group">
-                  <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 group-hover:text-[#1378ac] transition-colors">Dernière Sté.</span>
-                  <p className="text-sm font-black text-slate-700">24/03 - 14:20</p>
+                <div className="bg-muted p-4 rounded-xl border border-border">
+                  <span className="block text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Dernière Sté.</span>
+                  <p className="text-sm font-semibold text-foreground">24/03 - 14:20</p>
                 </div>
               </div>
 
-              {/* Separator */}
-              <div className="relative py-4">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-dashed border-slate-200"></div>
-                </div>
-              </div>
-
-              {/* Footer Button */}
-              <button 
+              <button
                 onClick={() => alert(`Impression fiche inventaire: ${selectedInstrument.id}`)}
-                className="w-full py-5 bg-white border-2 border-[#1378ac] text-[#1378ac] rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] hover:bg-[#1378ac] hover:text-white transition-all shadow-lg shadow-[#1378ac]/5 active:scale-95 flex items-center justify-center gap-3"
+                className="interactive-muted w-full rounded-lg py-3 text-xs font-medium uppercase tracking-wide flex items-center justify-center gap-2"
               >
-                <Printer className="w-5 h-5" />
-                IMPRIMER FICHE INVENTAIRE
+                <Printer className="size-4" />
+                Imprimer fiche inventaire
               </button>
             </div>
           </div>
@@ -1127,104 +465,96 @@ export function InventoryManagement() {
 
       {/* Registration Form Modal */}
       {showRegisterForm.show && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#0b4867]/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300 border border-white/20">
-            <div className="bg-[#1378ac] p-8 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <button type="button" onClick={() => setShowRegisterForm({show: false, id: ''})} className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" />
+          <div className="relative z-[101] bg-card w-full max-w-lg rounded-xl border border-border shadow-sm overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-primary p-5 text-primary-foreground flex items-center justify-between">
               <div>
-                <h3 className="text-xl font-black uppercase tracking-tight leading-none text-white">Nouvel Instrument Détecté</h3>
-                <p className="text-white/70 text-[10px] font-black uppercase tracking-[0.2em] mt-2 font-mono">CODE: {showRegisterForm.id}</p>
+                <h3 className="text-sm font-semibold uppercase tracking-wide">Nouvel Instrument Détecté</h3>
+                <p className="text-primary-foreground/70 text-[10px] font-medium uppercase tracking-wide mt-1 font-mono">CODE: {showRegisterForm.id}</p>
               </div>
-              <div className="h-12 w-12 bg-white/10 rounded-xl flex items-center justify-center">
-                <Settings className="w-6 h-6 text-white/50" />
+              <div className="size-10 bg-white/10 rounded-lg flex items-center justify-center">
+                <Package className="size-5 text-primary-foreground/50" />
               </div>
             </div>
-            <div className="p-8 space-y-6">
-               <div className="space-y-4">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
-                    <Info className="w-3 h-3" /> Lier à un modèle du catalogue
-                  </label>
-                  <select className="w-full bg-[#f4f8fb] border-2 border-[#d5e2ea] rounded-2xl p-4 text-xs font-black text-[#0b4867] focus:border-[#1378ac] outline-none appearance-none">
-                     <option>Pince Kocher Droite (Aesculap)</option>
-                     <option>Ciseaux Mayo (Codman)</option>
-                     <option>Ecarteur Farabeuf (Paire)</option>
-                  </select>
-               </div>
-               <div className="space-y-4">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
-                    <CheckCircle2 className="w-3 h-3" /> Statut Initial
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {["En Stock", "Utilisé", "Sale", "En Maintenance"].map(s => (
-                      <button key={s} className="py-3 bg-[#f4f8fb] border border-[#d5e2ea] rounded-xl text-[9px] font-bold text-slate-600 hover:border-[#1378ac] hover:text-[#1378ac] transition-all">{s}</button>
-                    ))}
-                  </div>
-               </div>
-               <button 
-                 onClick={() => setShowRegisterForm({show: false, id: ''})}
-                 className="w-full py-4 bg-[#11b5a2] text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-[#11b5a2]/20 flex items-center justify-center gap-2"
-               >
-                 <Plus className="w-4 h-4" /> Enregistrer dans l'inventaire
-               </button>
+            <div className="p-5 space-y-5">
+              <div className="space-y-3">
+                <label className="text-[10px] font-medium uppercase text-muted-foreground tracking-wide flex items-center gap-2">
+                  Lier à un modèle du catalogue
+                </label>
+                <select className="w-full rounded-lg border border-border bg-muted px-3 py-2.5 text-sm font-medium text-foreground focus:border-primary outline-none">
+                  <option>Pince Kocher Droite (Aesculap)</option>
+                  <option>Ciseaux Mayo (Codman)</option>
+                  <option>Ecarteur Farabeuf (Paire)</option>
+                </select>
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] font-medium uppercase text-muted-foreground tracking-wide flex items-center gap-2">
+                  Statut Initial
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {["En Stock", "Utilisé", "Sale", "En Maintenance"].map(s => (
+                    <button key={s} className="interactive-muted rounded-lg py-2.5 text-xs font-medium uppercase tracking-wide">{s}</button>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRegisterForm({show: false, id: ''})}
+                className="interactive-secondary w-full rounded-lg py-3 text-xs font-medium uppercase tracking-wide flex items-center justify-center gap-2"
+              >
+                <Plus className="size-4" /> Enregistrer dans l&apos;inventaire
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Bottom Navigation & Reset Footer */}
-      <footer className="fixed bottom-8 left-1/2 -translate-x-1/2 w-fit bg-white/80 backdrop-blur-md p-3 rounded-2xl border border-[#d5e2ea] shadow-2xl z-50 flex items-center gap-4 animate-in slide-in-from-bottom-8 duration-500">
+      {/* Bottom navigation footer */}
+      <footer className="fixed bottom-8 left-1/2 -translate-x-1/2 w-fit bg-card/90 backdrop-blur-sm p-2.5 rounded-xl border border-border shadow-sm z-50 flex items-center gap-3">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-slate-50 hover:text-slate-600 active:scale-95"
+          className="interactive-muted flex items-center gap-2 rounded-lg px-4 py-2.5 text-xs font-medium uppercase tracking-wide"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="size-4" />
           Retour
         </button>
-        
+
         <button
           onClick={() => setShowResetConfirm(true)}
-          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-red-50 hover:text-red-500 hover:border-red-100 active:scale-95"
+          className="interactive-muted flex items-center gap-2 rounded-lg px-4 py-2.5 text-xs font-medium uppercase tracking-wide"
         >
-          <RotateCcw className="w-4 h-4" />
-          Réinitialiser vue
+          <RotateCcw className="size-4" />
+          Réinitialiser
         </button>
 
-        <div className="h-8 w-px bg-slate-200 mx-2" />
+        <div className="h-6 w-px bg-border" />
 
-        <button 
-          onClick={() => {
-            if (mode === 'referentiel') setMode('inventaire');
-            else navigate("/");
-          }}
-          className="flex items-center gap-3 bg-[#1378ac] text-white px-8 py-3 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-[#1378ac]/20 hover:bg-[#0b4867] hover:-translate-y-0.5 active:scale-95 transition-all group"
+        <button
+          onClick={() => navigate("/dashboard")}
+          className="interactive-primary flex items-center gap-2 rounded-lg px-6 py-2.5 text-xs font-medium uppercase tracking-wide"
         >
-          {mode === 'referentiel' ? 'Vers Inventaires' : 'Menu Principal'}
-          <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+          Menu Principal
+          <ChevronRight className="size-4" />
         </button>
       </footer>
 
-      {/* GLOBAL RESET CONFIRMATION MODAL */}
+      {/* Global Reset Confirm Modal */}
       {showResetConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowResetConfirm(false)} />
-          <div className="relative bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-300">
-            <div className="h-16 w-16 rounded-2xl bg-red-50 flex items-center justify-center text-red-500 mb-6 mx-auto">
-              <AlertCircle className="w-8 h-8" />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <button type="button" onClick={() => setShowResetConfirm(false)} className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" />
+          <div className="relative z-[101] bg-card rounded-xl p-6 max-w-sm w-full shadow-sm border border-border animate-in zoom-in-95 duration-200">
+            <div className="size-14 rounded-xl bg-destructive/10 flex items-center justify-center text-destructive mb-5 mx-auto">
+              <AlertCircle className="size-7" />
             </div>
-            <h3 className="text-xl font-black text-slate-900 text-center uppercase tracking-tight mb-2">Réinitialiser ?</h3>
-            <p className="text-sm font-bold text-slate-500 text-center leading-relaxed mb-8">
+            <h3 className="text-base font-semibold text-foreground text-center mb-2">Réinitialiser ?</h3>
+            <p className="text-sm font-medium text-muted-foreground text-center leading-relaxed mb-6">
               Effacer la recherche, les filtres et les sélections actuelles ?
             </p>
             <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setShowResetConfirm(false)}
-                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all active:scale-95"
-              >
+              <button onClick={() => setShowResetConfirm(false)} className="interactive-muted py-2.5 rounded-lg text-xs font-medium uppercase tracking-wide">
                 Annuler
               </button>
-              <button
-                onClick={handleGlobalReset}
-                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-200 transition-all active:scale-95"
-              >
+              <button onClick={handleGlobalReset} className="interactive-danger py-2.5 rounded-lg text-xs font-medium uppercase tracking-wide">
                 Confirmer
               </button>
             </div>
@@ -1232,95 +562,104 @@ export function InventoryManagement() {
         </div>
       )}
 
-      {/* CATALOGUE EDIT MODAL */}
-      {isEditModalOpen && itemToEdit && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-[#0b4867]/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300 border border-white/20">
-            <div className="bg-[#1378ac] p-8 text-white flex items-center justify-between">
+      {/* Reassign Instrument Modal */}
+      {isReassignModalOpen && instrumentToReassign && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <button type="button" onClick={() => setIsReassignModalOpen(false)} className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" />
+          <div className="relative z-[101] bg-card w-full max-w-md rounded-xl border border-border shadow-sm overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-border flex items-center justify-between">
               <div>
-                <h3 className="text-xl font-black uppercase tracking-tight leading-none">Modifier {activeTab === 'boxes' ? 'la Boîte' : 'l\'Instrument'}</h3>
-                <p className="text-white/70 text-[10px] font-black uppercase tracking-[0.2em] mt-2 font-mono">REF: {itemToEdit.ref}</p>
+                <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">Réassigner l&apos;instrument</h3>
+                <p className="font-mono text-[10px] font-medium text-muted-foreground mt-0.5">{instrumentToReassign.id}</p>
               </div>
-              <button onClick={() => setIsEditModalOpen(false)} className="h-10 w-10 bg-white/10 rounded-xl flex items-center justify-center hover:bg-white/20 transition-all">
-                <X className="w-6 h-6" />
+              <button onClick={() => setIsReassignModalOpen(false)} className="interactive-muted size-8 flex items-center justify-center rounded-lg">
+                <X className="size-4" />
               </button>
             </div>
-            <div className="p-8 space-y-6">
-              <div className="space-y-4">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Désignation complète</label>
-                <input 
-                  type="text" 
-                  defaultValue={itemToEdit.name}
-                  onChange={(e) => setItemToEdit({...itemToEdit, name: e.target.value})}
-                  className="w-full bg-[#f4f8fb] border-2 border-[#d5e2ea] rounded-2xl p-4 text-xs font-black text-[#0b4867] focus:border-[#1378ac] outline-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Catégorie</label>
-                  <select 
-                    defaultValue={itemToEdit.category}
-                    onChange={(e) => setItemToEdit({...itemToEdit, category: e.target.value})}
-                    className="w-full bg-[#f4f8fb] border-2 border-[#d5e2ea] rounded-2xl p-4 text-xs font-black text-[#0b4867] focus:border-[#1378ac] outline-none appearance-none"
-                  >
-                    {activeTab === 'boxes' 
-                      ? ["ORTHO", "NEURO", "CARDIO", "DIGESTIF", "GENERAL"].map(c => <option key={c} value={c}>{c}</option>)
-                      : ["Préhension", "Écarteurs", "Coupe", "Suture"].map(c => <option key={c} value={c}>{c}</option>)
-                    }
-                  </select>
+
+            <div className="p-4 border-b border-border bg-muted space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="size-9 bg-card rounded-lg flex items-center justify-center border border-border">
+                  <Wrench className="size-4 text-muted-foreground" />
                 </div>
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Référence</label>
-                  <input 
-                    type="text" 
-                    defaultValue={itemToEdit.ref}
-                    onChange={(e) => setItemToEdit({...itemToEdit, ref: e.target.value})}
-                    className="w-full bg-[#f4f8fb] border-2 border-[#d5e2ea] rounded-2xl p-4 text-xs font-black text-[#0b4867] focus:border-[#1378ac] outline-none"
-                  />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{instrumentToReassign.name}</p>
+                  <p className="text-[10px] font-medium text-muted-foreground">
+                    Boîte actuelle : <span className="text-foreground font-semibold">{instrumentToReassign.parentBoxName || "—"}</span>
+                  </p>
                 </div>
               </div>
-              
-              <div className="pt-4 flex flex-col gap-3">
-                <button 
-                  onClick={() => saveEdit(itemToEdit)}
-                  className="w-full py-4 bg-[#11b5a2] text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-[#11b5a2]/20 hover:bg-[#0f9a8a] transition-all flex items-center justify-center gap-2"
-                >
-                  <CheckCircle2 className="w-4 h-4" /> Enregistrer les modifications
-                </button>
-                <button 
-                  onClick={() => handleDeleteClick(itemToEdit)}
-                  className="w-full py-4 bg-white border-2 border-red-100 text-red-500 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] hover:bg-red-50 transition-all flex items-center justify-center gap-2"
-                >
-                  <Trash2 className="w-4 h-4" /> Supprimer du catalogue
-                </button>
+              <div className="flex items-center gap-2 p-3 bg-warning/10 rounded-lg border border-warning/20">
+                <AlertTriangle className="size-3.5 text-warning shrink-0" />
+                <p className="text-[10px] font-medium text-warning">Cette action modifie la composition des deux boîtes concernées.</p>
               </div>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* DELETE CONFIRMATION MODAL */}
-      {isDeleteConfirmOpen && itemToDelete && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-[#0b4867]/80 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300 border border-white/20">
-            <div className="p-8 flex flex-col items-center text-center">
-              <div className="h-20 w-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mb-6 shadow-inner">
-                <Trash2 className="w-10 h-10" />
+            <div className="p-4 border-b border-border">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Rechercher une boîte…"
+                  value={reassignTraySearch}
+                  onChange={(e) => setReassignTraySearch(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-muted pl-9 pr-3 py-2.5 text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none focus:border-primary focus:bg-card"
+                />
               </div>
-              <h3 className="text-xl font-black text-[#0b4867] uppercase tracking-tight mb-2">Confirmation</h3>
-              <p className="text-sm font-bold text-slate-500 leading-relaxed mb-8">
-                Voulez-vous vraiment supprimer <span className="text-red-500">"{itemToDelete.name}"</span> du catalogue ? Cette action est irréversible.
-              </p>
-              <div className="grid grid-cols-2 gap-3 w-full">
-                <button 
-                  onClick={() => setIsDeleteConfirmOpen(false)}
-                  className="py-4 bg-slate-100 text-slate-400 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-200 transition-all"
-                >Annuler</button>
-                <button 
-                  onClick={confirmDelete}
-                  className="py-4 bg-red-500 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-red-200 hover:bg-red-600 transition-all"
-                >Supprimer</button>
-              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-2">
+              {allTrays.length === 0 ? (
+                <div className="p-6 text-center text-xs font-medium text-muted-foreground">Chargement des boîtes…</div>
+              ) : (
+                allTrays
+                  .filter((t) => {
+                    if (t.serialNumber === instrumentToReassign.parentBox) return false;
+                    const q = reassignTraySearch.toLowerCase();
+                    return !q || t.serialNumber.toLowerCase().includes(q) || t.label?.toLowerCase().includes(q);
+                  })
+                  .map((tray) => (
+                    <button
+                      key={tray.id}
+                      onClick={() => setSelectedReassignTray(selectedReassignTray?.id === tray.id ? null : tray)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors mb-1 ${
+                        selectedReassignTray?.id === tray.id
+                          ? "bg-primary text-primary-foreground"
+                          : "hover:bg-muted text-foreground"
+                      }`}
+                    >
+                      <Package className={`size-4 shrink-0 ${selectedReassignTray?.id === tray.id ? "text-primary-foreground" : "text-muted-foreground"}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-semibold truncate ${selectedReassignTray?.id === tray.id ? "text-primary-foreground" : "text-foreground"}`}>
+                          {tray.label}
+                        </p>
+                        <p className={`font-mono text-[10px] font-medium ${selectedReassignTray?.id === tray.id ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                          {tray.serialNumber}
+                        </p>
+                      </div>
+                      {selectedReassignTray?.id === tray.id && (
+                        <CheckCircle2 className="size-4 text-primary-foreground shrink-0" />
+                      )}
+                    </button>
+                  ))
+              )}
+            </div>
+
+            <div className="p-4 border-t border-border flex gap-3">
+              <button
+                onClick={() => setIsReassignModalOpen(false)}
+                className="interactive-muted flex-1 rounded-lg py-2.5 text-xs font-medium uppercase tracking-wide"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmReassign}
+                disabled={!selectedReassignTray || isReassigning}
+                className="interactive-primary flex-[2] rounded-lg py-2.5 text-xs font-medium uppercase tracking-wide flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ArrowRightLeft className="size-3.5" />
+                {isReassigning ? "Réassignation…" : "Confirmer réassignation"}
+              </button>
             </div>
           </div>
         </div>
@@ -1329,287 +668,16 @@ export function InventoryManagement() {
   );
 }
 
-function TabBtn({ active, label, icon, onClick }: { active: boolean, label: string, icon: string, onClick: () => void }) {
+function TabBtn({ active, label, icon, onClick }: { active: boolean; label: string; icon: React.ReactNode; onClick: () => void }) {
   return (
-    <button 
+    <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all ${active ? 'bg-white text-[#0b4867] shadow-sm ring-1 ring-[#d5e2ea]' : 'text-slate-400 hover:text-[#1378ac] hover:bg-white/50'}`}
+      className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${active ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
     >
-      <span className="text-xs">{icon}</span>
+      {icon}
       {label}
     </button>
   );
 }
 
-function BoxesGrid({ mode, onSelect, selectedId, isConfig, specialty }: { mode: ModeType, onSelect: (box: any) => void, selectedId?: string, isConfig?: boolean, specialty?: string }) {
-  const data = mode === "referentiel" 
-    ? (specialty && specialty !== "Toutes" ? referentielBoxes.filter(b => b.category === specialty) : referentielBoxes)
-    : inventaireBoxes;
-
-  return (
-    <>
-      {data.map((box, i) => (
-        <div 
-          key={i} 
-          onClick={() => onSelect(box)}
-          className={`group bg-white rounded-3xl border-2 p-6 cursor-pointer transition-all hover:shadow-2xl hover:-translate-y-1 relative overflow-hidden flex flex-col items-center gap-6 ${selectedId === box.id ? 'border-[#11b5a2] shadow-xl bg-[#fbfcfd]' : 'border-slate-50 hover:border-[#11b5a2]/20'}`}
-        >
-           <span className="absolute top-4 left-4 px-3 py-1 bg-[#eafaf7] text-[#11b5a2] text-[8px] font-black uppercase rounded-lg border border-[#bdece4]">
-              {box.category}
-           </span>
-
-           <div className="h-32 w-32 bg-[#f8fbfd] rounded-2xl flex items-center justify-center text-5xl grayscale group-hover:grayscale-0 transition-all group-hover:scale-110 duration-500 shadow-inner">
-              📦
-           </div>
-
-           <div className="w-full text-center space-y-3">
-              <h3 className="text-xs font-black text-slate-800 leading-tight min-h-[2em]">{box.name}</h3>
-              <div className="flex flex-col gap-1.5">
-                 <div className="px-3 py-1.5 bg-[#11b5a2] rounded-lg text-[9px] font-black text-white uppercase tracking-widest shadow-sm">
-                    {mode === 'referentiel' ? `${(box as any).instrumentsCount} instruments` : `LOC: ${(box as any).location}`}
-                 </div>
-                 {mode === 'inventaire' && (
-                    <div className="text-center font-mono text-[8px] text-slate-400 font-bold uppercase tracking-widest">
-                       ID: {(box as any).barcode}
-                    </div>
-                 )}
-                 {mode === 'referentiel' && (
-                    <div className="text-center text-[8px] text-slate-400 font-bold uppercase tracking-widest">
-                       Ref: {box.ref || '—'}
-                    </div>
-                 )}
-              </div>
-           </div>
-           
-           {isConfig && (
-             <div className="absolute inset-0 bg-[#11b5a2]/10 backdrop-blur-[1px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="bg-white text-[#11b5a2] px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg border border-[#11b5a2]/20">⚙ Configurer</span>
-             </div>
-           )}
-        </div>
-      ))}
-    </>
-  );
-}
-
-function InstrumentsGrid({ mode, onSelect, selectedId, isConfig }: { mode: ModeType, onSelect: (instrument: any) => void, selectedId?: string, isConfig?: boolean }) {
-  const data = mode === "referentiel" ? referentielInstruments : inventaireInstruments;
-
-  const getStatusColor = (status: InstrumentStatus) => {
-    switch (status) {
-      case "En Stock": return "bg-[#eafaf7] text-[#11b5a2] border-[#bdece4]";
-      case "Utilisé": return "bg-[#edf5f9] text-[#1378ac] border-[#d5e2ea]";
-      case "Sale": return "bg-[#fdecef] text-[#d6455d] border-[#f8d7da]";
-      case "En Maintenance": return "bg-[#fff6e9] text-[#f59e0b] border-[#ffe4bc]";
-      default: return "bg-slate-100 text-slate-400";
-    }
-  };
-
-  return (
-    <>
-      {data.map((inst, i) => (
-        <div 
-          key={i} 
-          onClick={() => onSelect(inst)}
-          className={`group bg-white rounded-3xl border-2 p-6 cursor-pointer transition-all hover:shadow-2xl hover:-translate-y-1 relative overflow-hidden flex flex-col items-center gap-6 ${selectedId === inst.id ? 'border-[#11b5a2] shadow-xl bg-[#fbfcfd]' : 'border-slate-50 hover:border-[#11b5a2]/20'}`}
-        >
-           <span className="absolute top-4 left-4 px-3 py-1 bg-[#eafaf7] text-[#11b5a2] text-[8px] font-black uppercase rounded-lg border border-[#bdece4]">
-              {inst.category || "INSTR"}
-           </span>
-
-           <div className="h-32 w-32 bg-[#f8fbfd] rounded-full flex items-center justify-center text-5xl grayscale group-hover:grayscale-0 transition-all group-hover:scale-110 duration-500 shadow-inner">
-              🔧
-           </div>
-
-           <div className="w-full text-center space-y-3">
-              <div className="flex flex-col gap-1">
-                <h3 className="text-xs font-black text-slate-800 leading-tight">{inst.name}</h3>
-                <p className="text-[9px] font-bold text-slate-400 line-clamp-1">{inst.description || "Instrument chirurgical haute précision"}</p>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                 {mode === 'referentiel' ? (
-                    <div className="px-3 py-1.5 bg-[#11b5a2] rounded-lg text-[9px] font-black text-white uppercase tracking-widest shadow-sm">
-                       In {(inst as any).parentModels?.length || 0} boxes
-                    </div>
-                 ) : (
-                    <div className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest text-center border ${getStatusColor((inst as any).status)}`}>
-                       {(inst as any).status}
-                    </div>
-                 )}
-                 <div className="text-center font-mono text-[8px] text-slate-400 font-bold uppercase tracking-widest">
-                    ID: {inst.id}
-                 </div>
-              </div>
-           </div>
-
-           {isConfig && (
-             <div className="absolute inset-0 bg-[#11b5a2]/10 backdrop-blur-[1px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="bg-white text-[#11b5a2] px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg border border-[#11b5a2]/20">⚙ Éditer</span>
-             </div>
-           )}
-        </div>
-      ))}
-    </>
-  );
-}
-
-// --- Mock Data ---
-
-const referentielBoxes = [
-  { 
-    id: "M-BOX-ORTHO-01", 
-    name: "Boite Petite Chirurgie Orthopédique", 
-    category: "ORTHO", 
-    ref: "ORT-1024",
-    instrumentsCount: 42, 
-    composition: [
-      { name: "Pince de kocher droite s\g 14 cm", quantity: 10, ref: "KM-4210", family: "Préhension" },
-      { name: "Pince de kocher courbe s\g 14 cm", quantity: 5, ref: "KM-4212", family: "Préhension" },
-      { name: "Pince à dissection a\g 14 cm", quantity: 8, ref: "PD-5560", family: "Préhension" },
-      { name: "Pince à dissection s\g 14 cm", quantity: 4, ref: "PD-5562", family: "Préhension" },
-      { name: "Ciseaux Mayo Courbes 16cm", quantity: 4, ref: "SM-1102", family: "Coupe" },
-      { name: "Ciseaux Metzenbaum 18cm", quantity: 2, ref: "SM-1205", family: "Coupe" },
-      { name: "Porte-aiguille Mayo-Hegar 16cm", quantity: 4, ref: "PH-9920", family: "Suture" },
-      { name: "Porte-aiguille Mayo-Hegar 20cm", quantity: 2, ref: "PH-9922", family: "Suture" },
-      { name: "Ecarteur Farabeuf (Paire)", quantity: 3, ref: "EF-3341", family: "Écarteurs" },
-    ]
-  },
-  { 
-    id: "M-BOX-NEURO-01", 
-    name: "Boite Micro-Neurochirurgie", 
-    category: "NEURO", 
-    ref: "NEU-2055",
-    instrumentsCount: 88, 
-    composition: [
-      { name: "Micro-pince de Jeweler", quantity: 12, ref: "MP-101", family: "Préhension" },
-      { name: "Pince de bipolarité", quantity: 8, ref: "BP-502", family: "Hémostase" },
-      { name: "Micro-ciseaux Vannas", quantity: 6, ref: "MC-202", family: "Coupe" },
-      { name: "Ecarteur Brain Ribbon", quantity: 4, ref: "BR-901", family: "Écarteurs" },
-      { name: "Canule d'aspiration micro", quantity: 10, ref: "AS-303", family: "Aspiration" },
-    ]
-  },
-  { 
-    id: "M-BOX-CARDIO-01", 
-    name: "Boite Chirurgie Coronaire", 
-    category: "CARDIO", 
-    ref: "CAR-1112",
-    instrumentsCount: 112, 
-    composition: [
-      { name: "Pince Bulldog", quantity: 15, ref: "BD-001", family: "Vasculaire" },
-      { name: "Clamp Aortique", quantity: 5, ref: "CL-550", family: "Vasculaire" },
-      { name: "Ciseaux de Potts", quantity: 4, ref: "PT-202", family: "Coupe" },
-      { name: "Pince DeBakey", quantity: 12, ref: "DB-140", family: "Préhension" },
-    ]
-  },
-  { 
-    id: "M-BOX-DIGEST-01", 
-    name: "Boite Coelioscopie Standard", 
-    category: "DIGESTIF", 
-    ref: "DIG-4089",
-    instrumentsCount: 24, 
-    composition: [
-      { name: "Trocart 10mm", quantity: 2, ref: "TR-10", family: "Accès" },
-      { name: "Trocart 5mm", quantity: 4, ref: "TR-05", family: "Accès" },
-      { name: "Pince Maryland", quantity: 4, ref: "MY-50", family: "Préhension" },
-      { name: "Ciseaux Laparo", quantity: 2, ref: "CL-80", family: "Coupe" },
-      { name: "Grasper", quantity: 6, ref: "GR-12", family: "Préhension" },
-    ]
-  },
-  { 
-    id: "M-BOX-ORTHO-02", 
-    name: "Boite Traumatologie Membre Inférieur", 
-    category: "ORTHO", 
-    ref: "ORT-1056",
-    instrumentsCount: 55, 
-    composition: [
-      { name: "Rugine de Farabeuf", quantity: 2, ref: "RG-15", family: "Rugines" },
-      { name: "Davier porte-os", quantity: 6, ref: "DV-22", family: "Réduction" },
-      { name: "Marteau de chirurgie", quantity: 1, ref: "MT-40", family: "Accessoires" },
-      { name: "Gouge de Stille", quantity: 4, ref: "GG-10", family: "Coupe" },
-    ]
-  },
-  { 
-    id: "M-BOX-GENERAL-01", 
-    name: "Boite Base Chirurgie Générale", 
-    category: "GENERAL", 
-    ref: "GEN-001",
-    instrumentsCount: 64, 
-    composition: [
-      { name: "Pince de Kocher", quantity: 12, ref: "KC-14", family: "Préhension" },
-      { name: "Pince de Pean", quantity: 12, ref: "PN-14", family: "Hémostase" },
-      { name: "Pince à dissection", quantity: 8, ref: "PD-14", family: "Préhension" },
-      { name: "Ciseaux Mayo", quantity: 4, ref: "CY-16", family: "Coupe" },
-    ]
-  },
-];
-
-const inventaireBoxes = [
-  { id: "BOX-VISC-001", name: "Boite Petite Chirurgie Orthopédique #01", category: "ORTHO", barcode: "BC-ORT-001", location: "Bloc 1", status: "Prêt", composition: [
-    ...Array.from({ length: 42 }, (_, i) => ({
-      name: `Instrument ORTHO #${i + 1}`,
-      barcode: `INST-O-${String(i + 1).padStart(3, '0')}`
-    }))
-  ]},
-  { id: "BOX-CELIO-002", name: "Boite CELIO #02", category: "VISC", barcode: "BC-CELIO-002", location: "Stérilisation", status: "Sale", composition: [
-    ...Array.from({ length: 30 }, (_, i) => ({
-      name: `Instrument CELIO #${i + 1}`,
-      barcode: `INST-C-${String(i + 1).padStart(3, '0')}`
-    }))
-  ]},
-];
-
-const referentielInstruments = [
-  { 
-    id: "M-INST-KELLY", 
-    name: "Pince de Kelly", 
-    category: "Préhension",
-    description: "Courbe, sans griffes, 14cm",
-    ref: "KL-140-C", 
-    material: "Stainless Steel (316L)",
-    sterilization: "Autoclave 134°C",
-    parentModels: [
-      { name: "Boite Laparatomie Standard", category: "Viscéral", qty: 4, ref: "M-BOX-LAPA" }, 
-      { name: "Boite Appendicectomie", category: "Viscéral", qty: 2, ref: "M-BOX-APP" },
-      { name: "Boite Césarienne", category: "Gynécologie", qty: 6, ref: "M-BOX-CESA" }
-    ] 
-  },
-  { 
-    id: "M-INST-ECARTEUR", 
-    name: "Écarteur de Farabeuf", 
-    category: "Écarteurs",
-    description: "Double, 15cm",
-    ref: "FB-150-D",
-    material: "Stainless Steel (316L)",
-    sterilization: "Autoclave 134°C",
-    parentModels: [
-      { name: "Boite Base Chirurgie Générale", category: "Général", qty: 2, ref: "GEN-001" }
-    ] 
-  },
-  { 
-    id: "M-INST-HAGER", 
-    name: "Porte-aiguille Mayo-Hegar", 
-    category: "Suture",
-    description: "Droit, 16cm",
-    ref: "MH-160-S",
-    material: "Stainless Steel (316L)",
-    sterilization: "Autoclave 134°C",
-    parentModels: [] 
-  },
-  { 
-    id: "M-INST-DISSEC", 
-    name: "Pince à dissection", 
-    category: "Préhension",
-    description: "Droite, avec griffes, 14cm",
-    ref: "PD-140-G",
-    material: "Stainless Steel (316L)",
-    sterilization: "Autoclave 134°C",
-    parentModels: [] 
-  },
-];
-
-const inventaireInstruments = [
-  { id: "INST-001", name: "Pince de kelly", model: "KM-4210", parentBox: "BOX-VISC-001", parentBoxName: "Boîte partie moll #01", status: "En Stock" as InstrumentStatus },
-  { id: "INST-002", name: "Pince de kelly", model: "KM-4210", parentBox: null, status: "Sale" as InstrumentStatus },
-  { id: "INST-003", name: "écarteur", model: "EF-3341", parentBox: "BOX-ORTHO-004", parentBoxName: "Boîte Orthopédie #04", status: "En Stock" as InstrumentStatus },
-  { id: "INST-004", name: "Pince de kelly", model: "KM-4210", parentBox: null, status: "En Maintenance" as InstrumentStatus },
-];
+// Mock data removed — data now loaded from API endpoints

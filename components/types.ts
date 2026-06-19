@@ -18,8 +18,7 @@ export type ModuleType =
   | "sterilization-chargement" 
   | "sterilization-sortie" 
   | "storage-distribution" 
-  | "patient-liaison" 
-  | "inventory" 
+  | "inventory"
   | "maintenance" 
   | "edition" 
   | null;
@@ -34,7 +33,6 @@ export const WORKFLOW_SEQUENCE: ModuleType[] = [
   "sterilization-chargement",
   "sterilization-sortie",
   "storage-distribution",
-  "patient-liaison"
 ];
 
 export const MODULE_LABELS: Record<string, string> = {
@@ -47,7 +45,6 @@ export const MODULE_LABELS: Record<string, string> = {
   "sterilization-chargement": "Stérilisation (Entrée)",
   "sterilization-sortie": "Stérilisation (Sortie)",
   "storage-distribution": "Stockage & Distribution",
-  "patient-liaison": "Liaison Patient",
 };
 
 export const MODULE_ZONES: Record<string, WorkflowZone> = {
@@ -60,7 +57,6 @@ export const MODULE_ZONES: Record<string, WorkflowZone> = {
   "sterilization-chargement": "zone-propre",
   "sterilization-sortie": "zone-sterile",
   "storage-distribution": "zone-sterile",
-  "patient-liaison": "liaison",
 };
 
 export const ZONE_INFO: Record<WorkflowZone, { label: string, icon: string, color: string }> = {

@@ -1,31 +1,27 @@
 "use client";
 
-import { type ReactNode, useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { 
-  Pencil, 
-  RotateCcw, 
-  UserMinus, 
-  AlertCircle, 
-  ChevronLeft,
+import { type ReactNode, useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { useFooterActions } from "@/contexts/FooterActionsContext";
+import {
+  Pencil,
+  AlertCircle,
   CheckCircle2,
-  X
+  X,
+  Package,
+  Wrench,
+  Thermometer,
 } from "lucide-react";
-
-interface ConformityChecks {
-  passage: boolean;
-  physico: boolean;
-  siccite: boolean;
-  integrite: boolean;
-}
 
 type DashboardSectionProps = {
   title: string;
   scanned: boolean;
-  icon: string;
+  icon: ReactNode;
   waitingText: string;
   children: ReactNode;
   forceShow?: boolean;
+  onEdit?: () => void;
 };
 
 type DataCardProps = {
@@ -37,20 +33,12 @@ type DataCardProps = {
 type StatusButtonProps = {
   active: boolean;
   onClick: () => void;
-  icon: string;
+  icon: ReactNode;
   label: string;
   color: "emerald" | "orange";
 };
 
-type CheckItemProps = {
-  label: string;
-  checked: boolean;
-  onClick: () => void;
-};
-
 interface SterilizationWizardProps {
-  initialPhase?: 1 | 2;
-  onPhaseChange?: (phase: 1 | 2) => void;
   onValidated?: (isValid: boolean) => void;
 }
 
@@ -65,26 +53,10 @@ type SteamCycleOption = {
   description: string;
 };
 
-type SteamCycleLogEntry = {
-  cycleType: SteamCycleType;
-  label: string;
-  targetTemp: string;
-  targetTime: string;
-  agentId: string;
-  timestamp: string;
-};
 
-interface TopOperatorPanelProps {
-  title: string;
-  subtitle: string;
-  confirmed: boolean;
-  waitingText: string;
-  name: string;
-  role: string;
-  onChangeUser: () => void;
-}
 
-export function SterilizationWizard({ initialPhase = 1, onPhaseChange, onValidated }: SterilizationWizardProps) {
+export function SterilizationWizard({ onValidated }: SterilizationWizardProps) {
+  const { user } = useAuth();
   const steamCycleOptions: SteamCycleOption[] = [
     {
       id: "instruments",
@@ -101,20 +73,24 @@ export function SterilizationWizard({ initialPhase = 1, onPhaseChange, onValidat
       description: "Rubber, silicone, and heat-sensitive plastics.",
     },
   ];
-  const [phase, setPhase] = useState<1 | 2>(initialPhase); // 1: Chargement, 2: Déchargement
   const navigate = useNavigate();
-  const location = useLocation();
+  const [qualified, setQualified] = useState<boolean | null>(null);
 
   useEffect(() => {
-    setPhase(initialPhase);
-  }, [initialPhase]);
+    fetch("/api/qualification/today?machineId=AUTOCLAVE-02")
+      .then((r) => r.json())
+      .then((d) => setQualified(!!d.qualified))
+      .catch(() => setQualified(false));
+  }, []);
 
-  const handlePhaseChange = (newPhase: 1 | 2) => {
-    setPhase(newPhase);
-    onPhaseChange?.(newPhase);
-    if (newPhase === 1) navigate("/sterilization-chargement");
-    else navigate("/sterilization-sortie");
-  };
+  const [pendingTrays, setPendingTrays] = useState<{ serialNumber: string; label: string }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/trays/pending-sterilization")
+      .then((r) => r.json())
+      .then((d) => setPendingTrays(d.trays ?? []))
+      .catch(() => {});
+  }, []);
 
   const [autoclaveStatus, setAutoclaveStatus] = useState<"ready" | "maintenance" | null>(null);
   const [sterilizationType, setSterilizationType] = useState<"vapeur" | "basse_temp">("vapeur");
@@ -124,42 +100,23 @@ export function SterilizationWizard({ initialPhase = 1, onPhaseChange, onValidat
     id: "",
     lotNumber: "",
     serialNumber: "",
-    expiryDate: "2026-12-31",
-    insertionDate: "2026-03-20",
-    dosesRemaining: 4,
+    expiryDate: "",
+    insertionDate: "",
+    dosesRemaining: 0,
     dosesRequired: 1
   });
   const [showDoseHistory, setShowDoseHistory] = useState(false);
   const [doseConsumptionAnimating, setDoseConsumptionAnimating] = useState(false);
   const [doseHistory, setDoseHistory] = useState<
-    { cycleId: string; usedAt: string; cassetteId: string; lotNumber: string; serialNumber: string; doseUsed: number }[]
-  >([
-    {
-      cycleId: "CY-BT-2026-028",
-      usedAt: "2026-04-10T09:20:00",
-      cassetteId: "H2O2-CASS-X99",
-      lotNumber: "LOT-H2O2-2403",
-      serialNumber: "SN-8842-91",
-      doseUsed: 1,
-    },
-    {
-      cycleId: "CY-BT-2026-031",
-      usedAt: "2026-04-11T13:05:00",
-      cassetteId: "H2O2-CASS-X99",
-      lotNumber: "LOT-H2O2-2403",
-      serialNumber: "SN-8842-91",
-      doseUsed: 1,
-    },
-  ]);
+    { usedAt: string; doseUsed: number; loadEventId: string; loadTimestamp: string }[]
+  >([]);
   const [btIncompatibilityError, setBtIncompatibilityError] = useState<string | null>(null);
   const [selectedSteamCycle, setSelectedSteamCycle] = useState<SteamCycleType | null>(null);
   const [steamCycleConfirmed, setSteamCycleConfirmed] = useState(false);
-  const [steamCycleLogs, setSteamCycleLogs] = useState<SteamCycleLogEntry[]>([]);
   const [sortingLoadMetadata, setSortingLoadMetadata] = useState<{
     highPrionRisk?: boolean;
     thermosensitive?: boolean;
   } | null>(null);
-  const [agentBadge, setAgentBadge] = useState({ id: "", name: "", role: "" });
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const formatDateFr = (dateValue: string) => {
@@ -198,42 +155,40 @@ export function SterilizationWizard({ initialPhase = 1, onPhaseChange, onValidat
       : "instruments";
   const selectedSteamCycleOption =
     steamCycleOptions.find((option) => option.id === selectedSteamCycle) ?? null;
-  const currentAgentId = agentBadge.id || "AGENT-INCONNU";
-
   const handleGlobalReset = () => {
-    if (phase === 1) {
-      setScannedItems([]);
-      setAutoclaveStatus(null);
-      setAgentBadge({ id: "", name: "", role: "" });
-      setSelectedSteamCycle(null);
-      setSteamCycleConfirmed(false);
-      setCassetteData(prev => ({
-        ...prev,
-        id: "",
-        lotNumber: "",
-        serialNumber: "",
-      }));
-      setShowDoseHistory(false);
-      setDoseConsumptionAnimating(false);
-    } else {
-      setSortieScannedItems([]);
-      setSortieAgentBadge({ id: "", name: "", role: "" });
-      setChecks({
-        passage: false,
-        physico: false,
-        siccite: false,
-        integrite: false,
-      });
-    }
+    setScannedItems([]);
+    setAutoclaveStatus(null);
+    setSelectedSteamCycle(null);
+    setSteamCycleConfirmed(false);
+    setCassetteData(prev => ({
+      ...prev,
+      id: "",
+      lotNumber: "",
+      serialNumber: "",
+    }));
+    setShowDoseHistory(false);
+    setDoseConsumptionAnimating(false);
     setShowResetConfirm(false);
   };
 
-  const [sortieScannedItems, setSortieScannedItems] = useState<string[]>([]);
-  const [sortieAgentBadge, setSortieAgentBadge] = useState({ id: "", name: "", role: "" });
   const [isCriticalError, setIsCriticalError] = useState(false);
+  const [loadEventId, setLoadEventId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [trayInfoMap, setTrayInfoMap] = useState<Record<string, string>>({});
+
+  const fetchTrayLabel = (serial: string) => {
+    fetch(`/api/trays/${serial}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.tray?.type?.label) {
+          setTrayInfoMap((prev) => ({ ...prev, [serial]: data.tray.type.label }))
+        }
+      })
+  }
 
   useEffect(() => {
-    // Check for critical error state from Qualification module
     const criticalError = localStorage.getItem('machine_critical_error');
     setIsCriticalError(criticalError === 'true');
   }, []);
@@ -247,80 +202,25 @@ export function SterilizationWizard({ initialPhase = 1, onPhaseChange, onValidat
     }
   }, []);
 
-  const [checks, setChecks] = useState<ConformityChecks>({
-    passage: false,
-    physico: false,
-    siccite: false,
-    integrite: false,
-  });
-
   const triggerSimulation = () => {
-    if (phase === 1) {
-      if (scannedItems.length < 3) {
-        const ids = sterilizationType === "basse_temp" 
-          ? ["BT-KIT-9920", "BT-OPTIC-4412", "BT-CAM-3301"] 
-          : ["EMB-9920", "EMB-4412", "EMB-3301"];
-        const randomId = ids[Math.floor(Math.random() * ids.length)];
-        setScannedItems((prev) => [...prev, `${randomId}-${prev.length + 1}`]);
-        setBtIncompatibilityError(null);
-      } else if (!autoclaveStatus) {
-        setAutoclaveStatus("ready");
-        if (sterilizationType === "vapeur") {
-          setSelectedSteamCycle(recommendedSteamCycle);
-          setSteamCycleConfirmed(false);
-        }
-      } else if (sterilizationType === "basse_temp" && !cassetteData.id) {
-        setCassetteData(prev => ({
-          ...prev,
-          id: "H2O2-CASS-X99",
-          lotNumber: "LOT-H2O2-2403",
-          serialNumber: "SN-8842-91",
-          insertionDate: new Date().toISOString().slice(0, 10),
-        }));
-      } else if (sterilizationType === "vapeur" && !selectedSteamCycle) {
+    if (scannedItems.length < pendingTrays.length) {
+      const serial = pendingTrays[scannedItems.length].serialNumber;
+      setScannedItems((prev) => [...prev, serial]);
+      fetchTrayLabel(serial);
+      setBtIncompatibilityError(null);
+    } else if (!autoclaveStatus) {
+      setAutoclaveStatus("ready");
+      if (sterilizationType === "vapeur") {
         setSelectedSteamCycle(recommendedSteamCycle);
         setSteamCycleConfirmed(false);
-      } else if (sterilizationType === "vapeur" && !steamCycleConfirmed) {
-        const simulatedChoice =
-          steamCycleOptions.find((option) => option.id === (selectedSteamCycle ?? recommendedSteamCycle)) ??
-          steamCycleOptions[0];
-        const logEntry: SteamCycleLogEntry = {
-          cycleType: simulatedChoice.id,
-          label: simulatedChoice.title,
-          targetTemp: simulatedChoice.temp,
-          targetTime: simulatedChoice.duration,
-          agentId: currentAgentId,
-          timestamp: new Date().toISOString(),
-        };
-        setSteamCycleLogs((prev) => [logEntry, ...prev]);
-        localStorage.setItem("steam_cycle_tracking_history", JSON.stringify([logEntry, ...steamCycleLogs].slice(0, 10)));
-        setSteamCycleConfirmed(true);
-      } else if (!agentBadge.name) {
-        setAgentBadge({ id: "AGENT-STER-01", name: "MME. AMINA ALAMI", role: "AGENT STÉRILISATION" });
       }
-    } else {
-      const allChecksValid = Object.values(checks).every(v => v);
-      if (!allChecksValid) {
-        setChecks({ passage: true, physico: true, siccite: true, integrite: true });
-      } else if (sortieScannedItems.length < 3) {
-        const id = `EMB-SORTIE-${Math.floor(1000 + Math.random() * 9000)}`;
-        setSortieScannedItems((prev) => [...prev, id]);
-      } else if (!sortieAgentBadge.name) {
-        setSortieAgentBadge({ id: "AGENT-STER-01", name: "MME. AMINA ALAMI", role: "AGENT STÉRILISATION" });
-      }
+    } else if (sterilizationType === "vapeur" && !selectedSteamCycle) {
+      setSelectedSteamCycle(recommendedSteamCycle);
+      setSteamCycleConfirmed(false);
+    } else if (sterilizationType === "vapeur" && !steamCycleConfirmed) {
+      setSteamCycleConfirmed(true);
     }
   };
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("steam_cycle_tracking_history");
-      if (stored) {
-        setSteamCycleLogs(JSON.parse(stored) as SteamCycleLogEntry[]);
-      }
-    } catch {
-      setSteamCycleLogs([]);
-    }
-  }, []);
 
   useEffect(() => {
     if (sterilizationType !== "vapeur") return;
@@ -332,38 +232,39 @@ export function SterilizationWizard({ initialPhase = 1, onPhaseChange, onValidat
     }
   }, [sterilizationType, hasHighPrionRisk, recommendedSteamCycle, selectedSteamCycle]);
 
-  const isCassetteValid = cassetteData.id !== "" &&
-    !isCassetteExpired &&
-    !isCassetteEmpty;
+  useEffect(() => {
+    if (sterilizationType !== "basse_temp") return
+    fetch("/api/cassettes/active")
+      .then((r) => r.ok ? r.json() : { cassette: null })
+      .then((data) => {
+        if (data.cassette) {
+          setCassetteData({
+            id: data.cassette.id,
+            lotNumber: data.cassette.lotNumber,
+            serialNumber: data.cassette.serialNumber,
+            expiryDate: data.cassette.expiryDate,
+            insertionDate: data.cassette.insertionDate,
+            dosesRemaining: data.cassette.dosesRemaining,
+            dosesRequired: data.cassette.dosesRequired,
+          })
+          setDoseHistory(data.cassette.doseHistory ?? [])
+        }
+      })
+  }, [sterilizationType])
+
+  const isCassetteValid = cassetteData.id !== "" && !isCassetteExpired && !isCassetteEmpty;
 
   const confirmSteamCycleSelection = () => {
-    const cycleToLog =
-      steamCycleOptions.find((option) => option.id === (selectedSteamCycle ?? recommendedSteamCycle)) ?? steamCycleOptions[0];
-
-    const logEntry: SteamCycleLogEntry = {
-      cycleType: cycleToLog.id,
-      label: cycleToLog.title,
-      targetTemp: cycleToLog.temp,
-      targetTime: cycleToLog.duration,
-      agentId: currentAgentId,
-      timestamp: new Date().toISOString(),
-    };
-
-    const nextLogs = [logEntry, ...steamCycleLogs].slice(0, 10);
-    setSteamCycleLogs(nextLogs);
     setSteamCycleConfirmed(true);
-    localStorage.setItem("steam_cycle_tracking_history", JSON.stringify(nextLogs));
   };
 
   const handleCassetteScan = (rawValue: string) => {
     const scannedId = rawValue.trim();
     if (!scannedId) return;
-
     const now = new Date();
     const normalized = scannedId.toUpperCase();
     const lotSuffix = normalized.slice(-4) || "0000";
     const serialSuffix = normalized.slice(-6) || "000000";
-
     setCassetteData((prev) => ({
       ...prev,
       id: normalized,
@@ -376,23 +277,11 @@ export function SterilizationWizard({ initialPhase = 1, onPhaseChange, onValidat
 
   const consumeCassetteDose = () => {
     if (sterilizationType !== "basse_temp" || !cassetteData.id || !isCassetteValid) return;
-
     setDoseConsumptionAnimating(true);
     setCassetteData((prev) => ({
       ...prev,
       dosesRemaining: Math.max(0, prev.dosesRemaining - prev.dosesRequired),
     }));
-    setDoseHistory((prev) => [
-      {
-        cycleId: `CY-BT-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`,
-        usedAt: new Date().toISOString(),
-        cassetteId: cassetteData.id,
-        lotNumber: cassetteData.lotNumber,
-        serialNumber: cassetteData.serialNumber,
-        doseUsed: cassetteData.dosesRequired,
-      },
-      ...prev,
-    ]);
     setTimeout(() => setDoseConsumptionAnimating(false), 900);
   };
 
@@ -400,33 +289,51 @@ export function SterilizationWizard({ initialPhase = 1, onPhaseChange, onValidat
     sterilizationType !== "vapeur" ||
     (autoclaveStatus === "ready" && selectedSteamCycle !== null && steamCycleConfirmed);
 
-  const isPhase1Complete = scannedItems.length > 0 && 
-    autoclaveStatus === "ready" && 
-    agentBadge.name !== "" &&
+  const isPhase1Complete = scannedItems.length > 0 &&
+    autoclaveStatus === "ready" &&
     (sterilizationType === "basse_temp" ? isCassetteValid && !btIncompatibilityError : isSteamSelectionReady);
-  const isPhase2Complete = Object.values(checks).every(v => v) && sortieScannedItems.length > 0 && sortieAgentBadge.name !== "";
 
   useEffect(() => {
-    onValidated?.(phase === 1 ? isPhase1Complete : isPhase2Complete);
-  }, [phase, isPhase1Complete, isPhase2Complete, onValidated]);
+    onValidated?.(isPhase1Complete);
+  }, [isPhase1Complete, onValidated]);
 
-  const handlePrimaryAction = () => {
-    if (phase === 1) {
-      handlePhaseChange(2);
-      return;
+  const handleLoadSubmit = async () => {
+    setSaving(true);
+    setSaveError(null);
+    setSaved(false);
+    const cycle = steamCycleOptions.find((o) => o.id === selectedSteamCycle);
+    try {
+      const res = await fetch("/api/sterilization/load", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sterilizationType,
+          cycleType: sterilizationType === "vapeur" ? (selectedSteamCycle ?? "instruments") : btCycleType,
+          targetTemp: cycle?.temp,
+          targetDuration: cycle?.duration,
+          operatorBadge: user?.badgeCode ?? "BADGE-001",
+          trays: scannedItems,
+          ...(sterilizationType === "basse_temp" && cassetteData.id ? { cassetteId: cassetteData.id } : {}),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        setSaveError(err.error ?? "Erreur lors du chargement");
+        return;
+      }
+      const { eventId } = await res.json();
+      setLoadEventId(eventId);
+      localStorage.setItem("sterilization_load_event_id", eventId);
+      setSaved(true);
+    } finally {
+      setSaving(false);
     }
-
-    if (sterilizationType === "basse_temp" && isCassetteValid) {
-      consumeCassetteDose();
-      setTimeout(() => navigate("/sterilization-sortie"), 500);
-      return;
-    }
-
-    navigate("/sterilization-sortie");
   };
+
   const quickActionLabel =
-    phase === 1
-      ? scannedItems.length < 3
+    pendingTrays.length === 0
+      ? null
+      : scannedItems.length < pendingTrays.length
         ? "Scanner emballage"
         : !autoclaveStatus
           ? "Scanner autoclave"
@@ -434,564 +341,475 @@ export function SterilizationWizard({ initialPhase = 1, onPhaseChange, onValidat
             ? "Choisir cycle"
             : sterilizationType === "vapeur" && !steamCycleConfirmed
               ? "Confirmer cycle"
-          : !agentBadge.name
-            ? "Scanner badge"
-            : null
-      : !Object.values(checks).every(v => v)
-        ? "Valider contrôles"
-        : sortieScannedItems.length < 3
-          ? "Scanner sortie"
-          : !sortieAgentBadge.name
-            ? "Scanner badge"
             : null;
-  const operatorState =
-    phase === 1
-      ? {
-          title: "Opérateur",
-          subtitle: "Chargement",
-          confirmed: agentBadge.name !== "",
-          name: agentBadge.name,
-          role: agentBadge.role,
-        }
-      : {
-          title: "Validation",
-          subtitle: "Responsable",
-          confirmed: sortieAgentBadge.name !== "",
-          name: sortieAgentBadge.name,
-          role: sortieAgentBadge.role,
-        };
+
+  const submitRef = useRef<() => Promise<void>>(async () => {});
+  submitRef.current = handleLoadSubmit;
+  const stableSubmit = useCallback(async () => { await submitRef.current(); }, []);
+  const stableReset = useCallback(() => setShowResetConfirm(true), []);
+  const { setOverride } = useFooterActions();
+
+  useEffect(() => {
+    setOverride({
+      submitLabel: sterilizationType === "basse_temp" ? "Start Cycle" : "Load Machine",
+      submittingLabel: "Enregistrement...",
+      doneLabel: "Étape suivante",
+      onSubmit: stableSubmit,
+      isReady: isPhase1Complete && !isCriticalError,
+      isSubmitting: saving,
+      isDone: saved,
+      onReset: stableReset,
+      saveError: isCriticalError ? "Machine erreur critique" : saveError,
+    });
+    return () => setOverride(null);
+  }, [sterilizationType, isPhase1Complete, isCriticalError, saving, saved, saveError, stableSubmit, stableReset, setOverride]);
+
+  if (qualified === null) return (
+    <div className="flex flex-1 items-center justify-center py-20">
+      <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+    </div>
+  );
+
+  if (!qualified) return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 py-20 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-warning-muted border border-warning/20">
+        <AlertCircle className="size-8 text-warning" />
+      </div>
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">Qualification requise</h2>
+        <p className="mt-1 text-sm font-medium text-muted-foreground">La qualification journalière du stérilisateur n&apos;a pas encore été effectuée.</p>
+      </div>
+      <button onClick={() => navigate("/qualification")} className="interactive-primary flex items-center gap-2 rounded-lg px-6 py-2.5 text-xs font-medium uppercase tracking-wide">
+        Aller à la qualification
+      </button>
+    </div>
+  );
 
   return (
-    <div className="h-full flex flex-col gap-4 text-slate-900 overflow-hidden">
-      <header className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr] shrink-0">
-        <section className="rounded-3xl border border-[#d5e2ea] bg-white/95 p-4 shadow-sm">
+    <div className="h-full flex flex-col gap-4 overflow-hidden">
+      <header className="shrink-0">
+        <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="space-y-1">
-              <div className="inline-flex items-center rounded-full border border-[#b8cad6] bg-[#edf5f9] px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.24em] text-[#1378ac]">
-                Phase 04 • Stérilisation
+              <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary-muted px-3 py-1 text-xs font-medium text-primary">
+                Phase 04 · Stérilisation
               </div>
-              <h1 className="text-xl font-semibold tracking-tight text-[#0b4867]">
-                {phase === 1 ? "Entrée Autoclave" : "Sortie Autoclave"}
+              <h1 className="text-base font-semibold text-foreground">
+                Entrée Autoclave
               </h1>
             </div>
 
-            <div className="flex rounded-xl border border-[#d5e2ea] bg-white/95 p-1 shadow-sm shrink-0">
-              <button 
-                onClick={() => handlePhaseChange(1)}
-                className={`px-4 py-2 rounded-lg text-[9px] font-semibold uppercase tracking-[0.2em] transition-all ${location.pathname === "/sterilization-chargement" ? 'bg-[#1378ac] text-white shadow-md' : 'text-slate-400 hover:text-[#0b4867]'}`}
-              >
+            <div className="flex rounded-lg border border-border bg-muted p-1 gap-1 shrink-0">
+              <button className="px-4 py-1.5 rounded-md text-xs font-medium uppercase tracking-wide bg-card text-foreground shadow-sm">
                 Chargement
               </button>
-              <button 
-                onClick={() => handlePhaseChange(2)}
-                className={`px-4 py-2 rounded-lg text-[9px] font-semibold uppercase tracking-[0.2em] transition-all ${location.pathname === "/sterilization-sortie" ? 'bg-[#11b5a2] text-white shadow-md' : 'text-slate-400 hover:text-[#0b4867]'}`}
+              <button
+                onClick={() => navigate("/sterilization-sortie")}
+                className="px-4 py-1.5 rounded-md text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-all"
               >
                 Validation
               </button>
             </div>
           </div>
 
-          {phase === 1 && (
-            <div className="mt-4 flex items-center gap-4 border-t border-slate-100 pt-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Type de Stérilisation :</p>
-              <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-200">
-                <button 
-                  onClick={() => setSterilizationType("vapeur")}
-                  className={`px-6 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${sterilizationType === "vapeur" ? 'bg-white text-[#1378ac] shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
-                >
-                  Vapeur d&apos;eau
-                </button>
-                <button 
-                  onClick={() => setSterilizationType("basse_temp")}
-                  className={`px-6 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${sterilizationType === "basse_temp" ? 'bg-[#1378ac] text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                >
-                  Basse Température
-                </button>
-              </div>
+          <div className="mt-4 flex items-center gap-4 border-t border-border pt-4">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Type de Stérilisation :</p>
+            <div className="flex rounded-lg border border-border bg-muted p-1 gap-1">
+              <button
+                onClick={() => setSterilizationType("vapeur")}
+                className={`px-4 py-1.5 rounded-md text-xs font-medium uppercase tracking-wide transition-all ${
+                  sterilizationType === "vapeur" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Vapeur d&apos;eau
+              </button>
+              <button
+                onClick={() => setSterilizationType("basse_temp")}
+                className={`px-4 py-1.5 rounded-md text-xs font-medium uppercase tracking-wide transition-all ${
+                  sterilizationType === "basse_temp" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Basse Température
+              </button>
             </div>
-          )}
+          </div>
         </section>
 
-        <TopOperatorPanel
-          title={operatorState.title}
-          subtitle={operatorState.subtitle}
-          confirmed={operatorState.confirmed}
-          waitingText="Scanner le badge"
-          name={operatorState.name}
-          role={operatorState.role}
-          onChangeUser={() => phase === 1 ? setAgentBadge({ id: "", name: "", role: "" }) : setSortieAgentBadge({ id: "", name: "", role: "" })}
-        />
       </header>
 
       <div className="flex-1 grid gap-4 lg:grid-cols-2 min-h-0 overflow-hidden">
-        {phase === 1 ? (
-          <>
-            <DashboardSection 
-              title={sterilizationType === "basse_temp" ? "Charge BT" : "Chariot"} 
-              scanned={scannedItems.length > 0} 
-              icon={sterilizationType === "basse_temp" ? "📦" : "🧺"} 
-              waitingText={sterilizationType === "basse_temp" ? "SCAN_CODE_BARRES_PANIER" : "Scanner les emballages"}
-              onEdit={() => {
-                setScannedItems([]);
-                setBtIncompatibilityError(null);
-              }}
-            >
-              <div className="flex flex-col h-full space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
-                {sterilizationType === "basse_temp" && (
-                  <div className="flex flex-col gap-2">
-                    <input 
-                      type="text"
-                      placeholder="SCAN_CODE_BARRES_PANIER"
-                      className="w-full bg-white border-2 border-[#d5e2ea] rounded-xl py-3 px-4 text-[10px] font-black tracking-widest focus:border-[#1378ac] outline-none transition-all"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          const val = (e.target as HTMLInputElement).value;
-                          if (val.toUpperCase().includes("INOX") || val.toUpperCase().includes("PLATEAU")) {
-                            setBtIncompatibilityError("Incompatible Load: This item requires High-Temperature Steam Sterilization.");
-                          } else {
-                            setScannedItems(prev => [...prev, val]);
-                            setBtIncompatibilityError(null);
-                          }
-                          (e.target as HTMLInputElement).value = "";
-                        }
-                      }}
-                    />
-                    {btIncompatibilityError && (
-                      <div className="p-3 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 animate-in shake duration-300">
-                        <AlertCircle className="w-4 h-4 text-red-500" />
-                        <p className="text-[8px] font-black text-red-600 uppercase leading-tight">{btIncompatibilityError}</p>
-                      </div>
-                    )}
+        <DashboardSection
+          title={sterilizationType === "basse_temp" ? "Charge BT" : "Chariot"}
+          scanned={scannedItems.length > 0}
+          icon={<Package className="size-8" />}
+          waitingText={
+            sterilizationType === "basse_temp"
+              ? "SCAN_CODE_BARRES_PANIER"
+              : pendingTrays.length === 0
+                ? "Aucun plateau en attente de stérilisation"
+                : "Scanner les emballages"
+          }
+          onEdit={() => {
+            setScannedItems([]);
+            setBtIncompatibilityError(null);
+          }}
+        >
+          <div className="flex flex-col h-full space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
+            {sterilizationType === "basse_temp" && (
+              <div className="flex flex-col gap-2">
+                <input
+                  type="text"
+                  placeholder="SCAN_CODE_BARRES_PANIER"
+                  className="w-full rounded-lg border border-border bg-muted px-3 py-2.5 text-sm font-medium text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary focus:bg-card"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = (e.target as HTMLInputElement).value;
+                      if (val.toUpperCase().includes("INOX") || val.toUpperCase().includes("PLATEAU")) {
+                        setBtIncompatibilityError("Incompatible Load: This item requires High-Temperature Steam Sterilization.");
+                      } else {
+                        setScannedItems(prev => [...prev, val]);
+                        setBtIncompatibilityError(null);
+                      }
+                      (e.target as HTMLInputElement).value = "";
+                    }
+                  }}
+                />
+                {btIncompatibilityError && (
+                  <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3 flex items-center gap-2">
+                    <AlertCircle className="size-4 text-destructive shrink-0" />
+                    <p className="text-xs font-medium text-destructive">{btIncompatibilityError}</p>
                   </div>
                 )}
-                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
-                  <div className="flex flex-wrap gap-2">
-                    {scannedItems.map((item, i) => (
-                      <div key={i} className="group relative rounded-xl border border-[#b8cad6] bg-[#edf5f9] px-3 py-2 text-[10px] font-semibold text-[#1378ac] shadow-sm">
-                        {item}
-                        <button 
-                          onClick={() => setScannedItems(prev => prev.filter((_, idx) => idx !== i))}
-                          className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
-                        >
-                          <X className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
-                    ))}
+              </div>
+            )}
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+              <div className="flex flex-col gap-2">
+                {scannedItems.map((item, i) => (
+                  <div key={i} className="group relative flex items-center gap-3 rounded-lg border border-border bg-card p-3 hover:border-primary/40 transition-colors">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-muted border border-primary/20">
+                      <Package className="size-4 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-foreground truncate">{item}</p>
+                      <p className="text-[10px] font-medium text-primary uppercase tracking-wide mt-0.5">
+                        {trayInfoMap[item] ?? "—"}
+                      </p>
+                    </div>
+                    <CheckCircle2 className="size-4 text-secondary shrink-0" />
+                    <button
+                      onClick={() => setScannedItems((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="shrink-0 size-5 rounded-full bg-destructive text-primary-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="shrink-0 rounded-lg border border-border bg-muted p-3 text-center">
+              <p className="text-[10px] font-medium text-primary uppercase tracking-wide">{scannedItems.length} objet(s) scanné(s)</p>
+            </div>
+          </div>
+        </DashboardSection>
+
+        <DashboardSection
+          title={sterilizationType === "basse_temp" ? "Unité & Cassette" : "Autoclave"}
+          scanned={autoclaveStatus !== null && (sterilizationType === "basse_temp" ? isCassetteValid : steamCycleConfirmed)}
+          icon={<Thermometer className="size-8" />}
+          waitingText={sterilizationType === "vapeur" ? "Scanner l'autoclave" : "SCAN_CASSETTE"}
+          onEdit={() => {
+            setAutoclaveStatus(null);
+            setSelectedSteamCycle(null);
+            setSteamCycleConfirmed(false);
+            setCassetteData(prev => ({ ...prev, id: "", lotNumber: "", serialNumber: "" }));
+            setShowDoseHistory(false);
+          }}
+          forceShow={sterilizationType === "basse_temp"}
+        >
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
+            <DataCard
+              label="Machine"
+              value={sterilizationType === "vapeur" ? "AUTOCLAVE N° 02" : "STÉRILISATEUR BT-01"}
+              color="purple"
+            />
+
+            {sterilizationType === "basse_temp" ? (
+              <div className="space-y-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Cycle BT</label>
+                  <select
+                    value={btCycleType}
+                    onChange={(e) => setBtCycleType(e.target.value as BtCycleType)}
+                    className="w-full rounded-lg border border-border bg-muted px-3 py-2.5 text-sm font-medium text-foreground outline-none cursor-pointer transition focus:border-primary focus:bg-card"
+                  >
+                    <option value="Standard">Standard (56°C)</option>
+                    <option value="Duo">Duo (50°C)</option>
+                    <option value="Flex">Flex (47°C)</option>
+                    <option value="Express">Express (56°C)</option>
+                  </select>
+                </div>
+
+                <div className="rounded-lg border border-border bg-muted p-3">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Paramètres Réf.</p>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-foreground">TEMP CIBLE</span>
+                    <span className="text-xs font-semibold text-primary">
+                      {btCycleType === "Standard" || btCycleType === "Express" ? "56°C" : btCycleType === "Duo" ? "50°C" : "47°C"}
+                    </span>
                   </div>
                 </div>
-                <div className="shrink-0 p-3 bg-[#f8fbfd] rounded-xl border border-[#d5e2ea] text-center">
-                   <p className="text-[10px] font-bold text-[#1378ac] uppercase tracking-widest">{scannedItems.length} objet(s) scanné(s)</p>
-                </div>
-              </div>
-            </DashboardSection>
 
-            <DashboardSection 
-              title={sterilizationType === "basse_temp" ? "Unité & Cassette" : "Autoclave"} 
-              scanned={autoclaveStatus !== null && (sterilizationType === "basse_temp" ? isCassetteValid : steamCycleConfirmed)} 
-              icon={sterilizationType === "vapeur" ? "♨️" : "❄️"} 
-              waitingText={sterilizationType === "vapeur" ? "Scanner l'autoclave" : "SCAN_CASSETTE"}
-              onEdit={() => {
-                setAutoclaveStatus(null);
-                setSelectedSteamCycle(null);
-                setSteamCycleConfirmed(false);
-                setCassetteData(prev => ({ ...prev, id: "", lotNumber: "", serialNumber: "" }));
-                setShowDoseHistory(false);
-              }}
-              forceShow={sterilizationType === "basse_temp"}
-            >
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
-                <DataCard 
-                  label="Machine" 
-                  value={sterilizationType === "vapeur" ? "AUTOCLAVE N° 02" : "STÉRILISATEUR BT-01"} 
-                  color="purple" 
-                />
-                
-                {sterilizationType === "basse_temp" ? (
-                  <div className="space-y-4">
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Cycle BT</label>
-                      <select 
-                        value={btCycleType}
-                        onChange={(e) => setBtCycleType(e.target.value as BtCycleType)}
-                        className="w-full bg-white border-2 border-[#d5e2ea] rounded-xl py-3 px-4 text-[10px] font-black uppercase tracking-widest focus:border-[#1378ac] outline-none"
-                      >
-                        <option value="Standard">Standard (56°C)</option>
-                        <option value="Duo">Duo (50°C)</option>
-                        <option value="Flex">Flex (47°C)</option>
-                        <option value="Express">Express (56°C)</option>
-                      </select>
-                    </div>
-
-                    <div className="p-3 bg-[#f8fbfd] rounded-xl border border-[#d5e2ea]">
-                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">Paramètres Réf.</p>
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black text-[#0b4867]">TEMP CIBLE</span>
-                        <span className="text-xs font-black text-[#1378ac]">
-                          {btCycleType === "Standard" || btCycleType === "Express" ? "56°C" : btCycleType === "Duo" ? "50°C" : "47°C"}
-                        </span>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder="SCAN_CASSETTE (H2O2)"
+                    className={`w-full rounded-lg border-2 px-3 py-2.5 text-sm font-medium outline-none transition-all ${
+                      cassetteData.id
+                        ? (isCassetteValid ? "border-secondary bg-card text-foreground" : "border-destructive bg-destructive/5 text-destructive")
+                        : "border-border bg-muted text-foreground placeholder:text-muted-foreground focus:border-primary focus:bg-card"
+                    }`}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleCassetteScan((e.target as HTMLInputElement).value);
+                        (e.target as HTMLInputElement).value = "";
+                      }
+                    }}
+                  />
+                  {cassetteData.id && (
+                    <div className="space-y-2 animate-in fade-in duration-500">
+                      <div className="rounded-lg border border-border bg-muted p-3 space-y-2">
+                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Cassette Active</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="rounded-lg bg-card border border-border p-2">
+                            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Lot Number</p>
+                            <p className="text-xs font-semibold text-foreground mt-1">{cassetteData.lotNumber || "—"}</p>
+                          </div>
+                          <div className="rounded-lg bg-card border border-border p-2">
+                            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Serial Number</p>
+                            <p className="text-xs font-semibold text-foreground mt-1">{cassetteData.serialNumber || "—"}</p>
+                          </div>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="space-y-2">
-                      <input 
-                        type="text"
-                        placeholder="SCAN_CASSETTE (H2O2)"
-                        className={`w-full bg-white border-2 rounded-xl py-3 px-4 text-[10px] font-black tracking-widest outline-none transition-all ${
-                          cassetteData.id
-                            ? (isCassetteValid ? 'border-[#11b5a2]' : 'border-red-500 text-red-600')
-                            : 'border-[#d5e2ea] focus:border-[#1378ac]'
-                        }`}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            handleCassetteScan((e.target as HTMLInputElement).value);
-                            (e.target as HTMLInputElement).value = "";
-                          }
-                        }}
-                      />
-                      {cassetteData.id && (
-                        <div className="space-y-2 animate-in fade-in duration-500">
-                          <div className="p-3 rounded-xl bg-white border border-slate-100 space-y-2">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Cassette Active</p>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="rounded-lg bg-[#f8fbfd] border border-[#d5e2ea] p-2">
-                                <p className="text-[7px] font-black text-slate-400 uppercase tracking-wider">Lot Number</p>
-                                <p className="text-[10px] font-black text-[#0b4867] mt-1">{cassetteData.lotNumber || "—"}</p>
-                              </div>
-                              <div className="rounded-lg bg-[#f8fbfd] border border-[#d5e2ea] p-2">
-                                <p className="text-[7px] font-black text-slate-400 uppercase tracking-wider">Serial Number</p>
-                                <p className="text-[10px] font-black text-[#0b4867] mt-1">{cassetteData.serialNumber || "—"}</p>
-                              </div>
-                            </div>
-                          </div>
+                      <div className="rounded-lg bg-card border border-border p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Doses H2O2 restantes</span>
+                          <span className={`text-xs font-semibold ${isCassetteEmpty ? "text-destructive" : "text-secondary"}`}>
+                            {cassetteData.dosesRemaining}/5
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-700 ${isCassetteEmpty ? "bg-destructive" : "bg-secondary"} ${doseConsumptionAnimating ? "animate-pulse" : ""}`}
+                            style={{ width: `${Math.max(0, Math.min(100, (cassetteData.dosesRemaining / 5) * 100))}%` }}
+                          />
+                        </div>
+                      </div>
 
-                          <div className="p-3 rounded-xl bg-white border border-slate-100">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Doses H2O2 restantes</span>
-                              <span className={`text-[10px] font-black ${isCassetteEmpty ? 'text-red-500' : 'text-[#11b5a2]'}`}>
-                                {cassetteData.dosesRemaining}/5
-                              </span>
-                            </div>
-                            <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                              <div
-                                className={`h-full transition-all duration-700 ${isCassetteEmpty ? "bg-red-500" : "bg-[#11b5a2]"} ${doseConsumptionAnimating ? "animate-pulse" : ""}`}
-                                style={{ width: `${Math.max(0, Math.min(100, (cassetteData.dosesRemaining / 5) * 100))}%` }}
-                              />
-                            </div>
-                          </div>
+                      <div className="rounded-lg bg-card border border-border p-3 flex items-center justify-between gap-3">
+                        <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium ${
+                          isCassetteExpired
+                            ? "border-destructive/20 bg-destructive/5 text-destructive"
+                            : "border-secondary/20 bg-secondary-muted text-secondary"
+                        }`}>
+                          Ouverte: {formatDateFr(cassetteData.insertionDate)} • Rebut: {discardDate ? discardDate.toLocaleDateString("fr-FR") : "—"}
+                        </span>
+                        <button
+                          onClick={() => setShowDoseHistory((prev) => !prev)}
+                          className="shrink-0 text-[10px] font-medium text-primary hover:underline transition-colors uppercase tracking-wide"
+                        >
+                          Voir historique
+                        </button>
+                      </div>
 
-                          <div className="p-3 rounded-xl bg-white border border-slate-100 flex items-center justify-between gap-3">
-                            <div className={`inline-flex items-center rounded-full border px-3 py-1 text-[8px] font-black uppercase tracking-widest ${
-                              isCassetteExpired ? "border-red-200 bg-red-50 text-red-600" : "border-[#bdece4] bg-[#eafaf7] text-[#0b786e]"
-                            }`}>
-                              Ouverte: {formatDateFr(cassetteData.insertionDate)} • Rebut: {discardDate ? discardDate.toLocaleDateString("fr-FR") : "—"}
+                      {showDoseHistory && (
+                        <div className="rounded-lg border border-border bg-muted p-3 space-y-2">
+                          {doseHistory.slice(0, 4).map((entry) => (
+                            <div key={`${entry.loadEventId}-${entry.usedAt}`} className="flex items-center justify-between text-[10px] font-medium text-muted-foreground">
+                              <span>{new Date(entry.loadTimestamp).toLocaleDateString("fr-FR")}</span>
+                              <span>{new Date(entry.usedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} — {entry.doseUsed} dose</span>
                             </div>
-                            <button
-                              onClick={() => setShowDoseHistory((prev) => !prev)}
-                              className="shrink-0 text-[8px] font-black uppercase tracking-widest text-[#1378ac] hover:text-[#0f6a98] transition-colors"
-                            >
-                              Voir historique des doses
-                            </button>
-                          </div>
-
-                          {showDoseHistory && (
-                            <div className="rounded-xl border border-[#d5e2ea] bg-[#f8fbfd] p-3 space-y-2">
-                              {doseHistory
-                                .filter((entry) => entry.cassetteId === cassetteData.id)
-                                .slice(0, 4)
-                                .map((entry) => (
-                                  <div key={`${entry.cycleId}-${entry.usedAt}`} className="flex items-center justify-between text-[8px] font-black uppercase tracking-wider text-slate-500">
-                                    <span>{entry.cycleId}</span>
-                                    <span>{new Date(entry.usedAt).toLocaleDateString("fr-FR")} -{entry.doseUsed} dose</span>
-                                  </div>
-                                ))}
-                              {doseHistory.filter((entry) => entry.cassetteId === cassetteData.id).length === 0 && (
-                                <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Aucun historique pour cette cassette.</p>
-                              )}
-                            </div>
-                          )}
-
-                          {!isCassetteValid && (
-                            <div className="p-2 bg-red-50 border border-red-100 rounded-lg text-center">
-                              <p className="text-[7px] font-black text-red-600 uppercase tracking-widest">Cassette expirée ou vide. Démarrage cycle bloqué.</p>
-                            </div>
+                          ))}
+                          {doseHistory.length === 0 && (
+                            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Aucun historique pour cette cassette.</p>
                           )}
                         </div>
                       )}
+
+                      {!isCassetteValid && (
+                        <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-2 text-center">
+                          <p className="text-[10px] font-medium text-destructive uppercase tracking-wide">Cassette expirée ou vide. Démarrage cycle bloqué.</p>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="grid gap-3">
-                      <StatusButton active={autoclaveStatus === 'ready'} onClick={() => setAutoclaveStatus(autoclaveStatus === 'ready' ? null : 'ready')} color="emerald" icon="✅" label="Prêt" />
-                      <StatusButton active={autoclaveStatus === 'maintenance'} onClick={() => setAutoclaveStatus("maintenance")} color="orange" icon="🛠️" label="Maint." />
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid gap-3">
+                  <StatusButton
+                    active={autoclaveStatus === "ready"}
+                    onClick={() => setAutoclaveStatus(autoclaveStatus === "ready" ? null : "ready")}
+                    color="emerald"
+                    icon={<CheckCircle2 className="size-5" />}
+                    label="Prêt"
+                  />
+                  <StatusButton
+                    active={autoclaveStatus === "maintenance"}
+                    onClick={() => setAutoclaveStatus("maintenance")}
+                    color="orange"
+                    icon={<Wrench className="size-5" />}
+                    label="Maint."
+                  />
+                </div>
+
+                {autoclaveStatus === "ready" && (
+                  <div className="rounded-xl border border-border bg-muted p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Cycle Selection</p>
+                        <h3 className="text-sm font-semibold text-foreground">Choix du cycle vapeur</h3>
+                      </div>
+                      {hasHighPrionRisk && (
+                        <span className="rounded-full border border-destructive/20 bg-destructive/5 px-2.5 py-0.5 text-[10px] font-medium uppercase text-destructive">
+                          Risque Prion
+                        </span>
+                      )}
                     </div>
 
-                    {autoclaveStatus === "ready" && (
-                      <div className="rounded-2xl border border-[#d5e2ea] bg-[#f8fbfd] p-4 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Cycle Selection</p>
-                            <h3 className="text-sm font-black text-[#0b4867] uppercase tracking-tight">Choix du cycle vapeur</h3>
-                          </div>
-                          {hasHighPrionRisk && (
-                            <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[8px] font-black uppercase tracking-widest text-red-600">
-                              Prion Risk
-                            </span>
-                          )}
-                        </div>
-
-                        {hasHighPrionRisk && (
-                          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[9px] font-black uppercase tracking-[0.18em] text-red-600">
-                            Prion risk detected: 134°C cycle mandatory.
-                          </div>
-                        )}
-
-                        <div className="grid gap-3">
-                          {steamCycleOptions.map((option) => {
-                            const isSelected = selectedSteamCycle === option.id;
-                            const isRecommended = recommendedSteamCycle === option.id;
-                            const isDisabled = hasHighPrionRisk && option.id === "caoutchouc";
-                            const showMaterialWarning = hasThermosensitiveLoad && option.id === "instruments" && !hasHighPrionRisk;
-
-                            return (
-                              <button
-                                key={option.id}
-                                type="button"
-                                disabled={isDisabled}
-                                onClick={() => {
-                                  setSelectedSteamCycle(option.id);
-                                  setSteamCycleConfirmed(false);
-                                }}
-                                className={`w-full rounded-2xl border-2 p-5 text-left transition-all ${
-                                  isDisabled
-                                    ? "cursor-not-allowed border-red-200 bg-red-50 opacity-70"
-                                    : isSelected
-                                      ? "border-[#1378ac] bg-white shadow-lg shadow-[#1378ac]/10"
-                                      : isRecommended
-                                        ? "border-[#11b5a2] bg-white shadow-[0_0_0_4px_rgba(17,181,162,0.12)]"
-                                        : "border-[#d5e2ea] bg-white hover:border-[#1378ac]/40"
-                                }`}
-                              >
-                                <div className="flex items-start justify-between gap-4">
-                                  <div className="space-y-2">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-sm font-black uppercase tracking-tight text-[#0b4867]">{option.title}</span>
-                                      {isRecommended && (
-                                        <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-2.5 py-1 text-[8px] font-black uppercase tracking-widest text-[#0b786e]">
-                                          Recommended
-                                        </span>
-                                      )}
-                                      {showMaterialWarning && (
-                                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[8px] font-black uppercase tracking-widest text-amber-700">
-                                          ! Matériaux sensibles
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-[10px] font-bold text-slate-500 leading-relaxed">{option.description}</p>
-                                  </div>
-
-                                  <div className="shrink-0 rounded-2xl bg-[#edf5f9] px-4 py-3 text-center border border-[#d5e2ea] min-w-[110px]">
-                                    <p className="text-lg font-black text-[#1378ac] leading-none">{option.temp}</p>
-                                    <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-slate-400">{option.duration}</p>
-                                  </div>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {hasThermosensitiveLoad && !hasHighPrionRisk && (
-                          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[9px] font-black uppercase tracking-[0.18em] text-amber-700">
-                            Thermosensitive or rubber/plastic load detected: prefer the 121°C cycle.
-                          </div>
-                        )}
-
-                        <div className="rounded-xl border border-[#d5e2ea] bg-white p-4 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Sélection active</span>
-                            {steamCycleConfirmed && (
-                              <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-2.5 py-1 text-[8px] font-black uppercase tracking-widest text-[#0b786e]">
-                                Confirmed
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm font-black text-[#0b4867]">
-                            {selectedSteamCycleOption ? `${selectedSteamCycleOption.title} • ${selectedSteamCycleOption.temp} / ${selectedSteamCycleOption.duration}` : "Aucun cycle sélectionné"}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={confirmSteamCycleSelection}
-                            disabled={!selectedSteamCycle || autoclaveStatus !== "ready" || !agentBadge.id}
-                            className={`w-full rounded-xl py-3 text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
-                              selectedSteamCycle && autoclaveStatus === "ready" && agentBadge.id
-                                ? "bg-[#1378ac] text-white hover:bg-[#0f6a98]"
-                                : "bg-slate-100 text-slate-300 cursor-not-allowed"
-                            }`}
-                          >
-                            Confirmer le cycle avant chargement
-                          </button>
-                          {!agentBadge.id && (
-                            <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">
-                              Scanner le badge opérateur pour journaliser la sélection du cycle.
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="rounded-xl border border-[#d5e2ea] bg-white p-4 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Live Tracking</p>
-                            <span className="text-[8px] font-black uppercase tracking-widest text-[#1378ac]">Historique cycle</span>
-                          </div>
-                          <div className="space-y-2">
-                            {steamCycleLogs.slice(0, 4).map((entry) => (
-                              <div key={`${entry.timestamp}-${entry.cycleType}`} className="rounded-lg bg-[#f8fbfd] border border-slate-100 px-3 py-2 flex items-center justify-between gap-3">
-                                <div>
-                                  <p className="text-[9px] font-black uppercase tracking-widest text-[#0b4867]">{entry.label}</p>
-                                  <p className="text-[8px] font-bold uppercase tracking-wider text-slate-400">{entry.targetTemp} • {entry.targetTime}</p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-[8px] font-black uppercase tracking-wider text-slate-500">{entry.agentId}</p>
-                                  <p className="text-[8px] font-bold text-slate-400">{new Date(entry.timestamp).toLocaleString("fr-FR")}</p>
-                                </div>
-                              </div>
-                            ))}
-                            {steamCycleLogs.length === 0 && (
-                              <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Aucune sélection de cycle enregistrée.</p>
-                            )}
-                          </div>
-                        </div>
+                    {hasHighPrionRisk && (
+                      <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3 flex items-center gap-2">
+                        <AlertCircle className="size-4 text-destructive shrink-0" />
+                        <p className="text-xs font-medium text-destructive">Risque prion détecté : cycle 134°C obligatoire.</p>
                       </div>
                     )}
-                  </div>
-                )}
-              </div>
-            </DashboardSection>
-          </>
-        ) : (
-          <>
-            <DashboardSection 
-              title="Conformité" 
-              scanned={Object.values(checks).every(v => v)} 
-              icon="📋" 
-              waitingText="Vérification" 
-              forceShow
-              onEdit={() => setChecks({ passage: false, physico: false, siccite: false, integrite: false })}
-            >
-              <div className="flex flex-col h-full space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
-                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
-                  <CheckItem label="Indicateurs passage" checked={checks.passage} onClick={() => setChecks({...checks, passage: !checks.passage})} />
-                  <CheckItem label="Physico-chimiques" checked={checks.physico} onClick={() => setChecks({...checks, physico: !checks.physico})} />
-                  <CheckItem label="Siccité emballage" checked={checks.siccite} onClick={() => setChecks({...checks, siccite: !checks.siccite})} />
-                  <CheckItem label="Intégrité condit." checked={checks.integrite} onClick={() => setChecks({...checks, integrite: !checks.integrite})} />
-                </div>
-              </div>
-            </DashboardSection>
 
-            <DashboardSection 
-              title="Libération" 
-              scanned={sortieScannedItems.length > 0} 
-              icon="📦" 
-              waitingText="Scan sortie"
-              onEdit={() => setSortieScannedItems([])}
-            >
-              <div className="flex flex-col h-full space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
-                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
-                  <div className="flex flex-wrap gap-2">
-                    {sortieScannedItems.map((item, i) => (
-                      <div key={i} className="group relative rounded-xl border border-[#bdece4] bg-[#eafaf7] px-3 py-2 text-[10px] font-semibold text-[#0b786e] shadow-sm">
-                        {item}
-                        <button 
-                          onClick={() => setSortieScannedItems(prev => prev.filter((_, idx) => idx !== i))}
-                          className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
-                        >
-                          <X className="w-2.5 h-2.5" />
-                        </button>
+                    <div className="grid gap-3">
+                      {steamCycleOptions.map((option) => {
+                        const isSelected = selectedSteamCycle === option.id;
+                        const isRecommended = recommendedSteamCycle === option.id;
+                        const isDisabled = hasHighPrionRisk && option.id === "caoutchouc";
+                        const showMaterialWarning = hasThermosensitiveLoad && option.id === "instruments" && !hasHighPrionRisk;
+
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            disabled={isDisabled}
+                            onClick={() => {
+                              setSelectedSteamCycle(option.id);
+                              setSteamCycleConfirmed(false);
+                            }}
+                            className={`w-full rounded-xl border-2 p-4 text-left transition-all ${
+                              isDisabled
+                                ? "cursor-not-allowed border-destructive/20 bg-destructive/5 opacity-70"
+                                : isSelected
+                                  ? "border-primary bg-card shadow-sm"
+                                  : isRecommended
+                                    ? "border-secondary bg-card"
+                                    : "border-border bg-card hover:border-primary/40"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-sm font-semibold text-foreground">{option.title}</span>
+                                  {isRecommended && (
+                                    <span className="rounded-full border border-secondary/20 bg-secondary-muted px-2.5 py-0.5 text-[10px] font-medium uppercase text-secondary">
+                                      Recommandé
+                                    </span>
+                                  )}
+                                  {showMaterialWarning && (
+                                    <span className="rounded-full border border-warning/20 bg-warning-muted px-2.5 py-0.5 text-[10px] font-medium uppercase text-warning">
+                                      Matériaux sensibles
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs font-medium text-muted-foreground leading-relaxed">{option.description}</p>
+                              </div>
+
+                              <div className="shrink-0 rounded-lg bg-primary-muted px-4 py-3 text-center border border-primary/20 min-w-[110px]">
+                                <p className="text-base font-semibold text-primary leading-none">{option.temp}</p>
+                                <p className="mt-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{option.duration}</p>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {hasThermosensitiveLoad && !hasHighPrionRisk && (
+                      <div className="bg-warning-muted border border-warning/20 rounded-lg p-3 flex items-center gap-2">
+                        <AlertCircle className="size-4 text-warning shrink-0" />
+                        <p className="text-xs font-medium text-warning">Charge thermosensible détectée : préférer le cycle 121°C.</p>
                       </div>
-                    ))}
-                  </div>
-                </div>
-                {sortieScannedItems.length > 0 && (
-                  <div className="shrink-0 rounded-xl bg-[#11b5a2] p-3 text-center text-[9px] font-bold uppercase tracking-[0.2em] text-white shadow-md">
-                    Charge liée au Cycle N°2026-001
+                    )}
+
+                    <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Sélection active</span>
+                        {steamCycleConfirmed && (
+                          <span className="rounded-full border border-secondary/20 bg-secondary-muted px-2.5 py-0.5 text-[10px] font-medium uppercase text-secondary">
+                            Confirmé
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm font-semibold text-foreground">
+                        {selectedSteamCycleOption
+                          ? `${selectedSteamCycleOption.title} • ${selectedSteamCycleOption.temp} / ${selectedSteamCycleOption.duration}`
+                          : "Aucun cycle sélectionné"}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={confirmSteamCycleSelection}
+                        disabled={!selectedSteamCycle || autoclaveStatus !== "ready"}
+                        className={`w-full rounded-lg py-2.5 text-xs font-medium uppercase tracking-wide transition-all ${
+                          selectedSteamCycle && autoclaveStatus === "ready"
+                            ? "interactive-primary"
+                            : "bg-muted text-muted-foreground cursor-not-allowed border border-border"
+                        }`}
+                      >
+                        Confirmer le cycle avant chargement
+                      </button>
+                    </div>
+
                   </div>
                 )}
               </div>
-            </DashboardSection>
-          </>
-        )}
-      </div>
-
-      {/* Footer Actions */}
-      <div className="relative shrink-0 flex items-center justify-between bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto gap-4">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-slate-50 hover:text-slate-600 active:scale-95"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Étape précédente
-          </button>
-          
-          <button
-            onClick={() => setShowResetConfirm(true)}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-red-50 hover:text-red-500 hover:border-red-100 active:scale-95"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Tout effacer
-          </button>
-        </div>
-
-        <button
-          onClick={handlePrimaryAction}
-          disabled={isCriticalError || (phase === 1 ? !isPhase1Complete : !isPhase2Complete)}
-          className={`group relative flex items-center gap-3 rounded-xl px-12 py-3.5 text-[11px] font-black uppercase tracking-[0.22em] transition-all duration-300 shadow-xl ${
-            isCriticalError
-              ? "bg-red-500 text-white cursor-not-allowed opacity-80"
-              : (phase === 1 ? isPhase1Complete : isPhase2Complete)
-                ? "bg-[#1378ac] text-white hover:bg-[#0f6a98] hover:-translate-y-0.5 active:scale-95"
-                : "bg-slate-100 text-slate-300 cursor-not-allowed border border-slate-200 shadow-none"
-          }`}
-        >
-          {isCriticalError ? (
-            <AlertCircle className="w-4 h-4 animate-pulse" />
-          ) : (phase === 1 ? isPhase1Complete : isPhase2Complete) && (
-            <CheckCircle2 className="w-4 h-4" />
-          )}
-          {isCriticalError 
-            ? "Machine Erreur Critique" 
-            : (phase === 1
-              ? (sterilizationType === "basse_temp" ? "Start Cycle" : "Load Machine")
-              : "Valider le cycle")}
-        </button>
-        {doseConsumptionAnimating && (
-          <div className="absolute right-8 -top-6 rounded-full bg-[#0b4867] px-3 py-1 text-[8px] font-black uppercase tracking-widest text-[#8de7da] animate-in fade-in zoom-in duration-500">
-            Dose consommée -1
+            )}
           </div>
-        )}
+        </DashboardSection>
       </div>
 
-      {/* GLOBAL RESET CONFIRMATION MODAL */}
+      {doseConsumptionAnimating && (
+        <div className="fixed bottom-28 right-8 z-[90] rounded-full bg-primary px-3 py-1 text-[10px] font-medium text-primary-foreground animate-in fade-in zoom-in duration-500">
+          Dose consommée -1
+        </div>
+      )}
+
+      {/* Reset Confirmation Modal */}
       {showResetConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowResetConfirm(false)} />
-          <div className="relative bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-300">
-            <div className="h-16 w-16 rounded-2xl bg-red-50 flex items-center justify-center text-red-500 mb-6 mx-auto">
-              <AlertCircle className="w-8 h-8" />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <button type="button" onClick={() => setShowResetConfirm(false)} className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" />
+          <div className="relative z-[101] bg-card rounded-xl border border-border p-6 max-w-sm w-full shadow-lg animate-in zoom-in-95 duration-200">
+            <div className="size-14 rounded-xl bg-destructive/10 flex items-center justify-center text-destructive mb-5 mx-auto">
+              <AlertCircle className="size-7" />
             </div>
-            <h3 className="text-xl font-black text-slate-900 text-center uppercase tracking-tight mb-2">Tout effacer ?</h3>
-            <p className="text-sm font-bold text-slate-500 text-center leading-relaxed mb-8">
+            <h3 className="text-lg font-semibold text-foreground text-center mb-2">Tout effacer ?</h3>
+            <p className="text-sm font-medium text-muted-foreground text-center mb-6">
               Êtes-vous sûr de vouloir effacer toutes les données pour ce cycle de stérilisation ?
             </p>
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => setShowResetConfirm(false)}
-                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all active:scale-95"
+                className="interactive-muted py-2.5 rounded-lg text-xs font-medium uppercase tracking-wide"
               >
                 Annuler
               </button>
               <button
                 onClick={handleGlobalReset}
-                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-200 transition-all active:scale-95"
+                className="interactive-danger py-2.5 rounded-lg text-xs font-medium uppercase tracking-wide"
               >
                 Confirmer
               </button>
@@ -1000,43 +818,48 @@ export function SterilizationWizard({ initialPhase = 1, onPhaseChange, onValidat
         </div>
       )}
 
-      {/* Simulation Floating Button */}
+      {/* Demo simulation panel */}
       {quickActionLabel && (
-        <button
-          onClick={triggerSimulation}
-          className="fixed bottom-32 right-10 flex items-center gap-3 rounded-full bg-[#0b4867] px-6 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-2xl transition-all hover:bg-[#0a3952] hover:scale-105 active:scale-95 group z-[40]"
-        >
-          <span className="text-xl text-[#8de7da] animate-pulse">⌁</span>
-          <span>{quickActionLabel}</span>
-        </button>
+        <div className="fixed bottom-32 right-6 z-[100]">
+          <div className="bg-card rounded-xl p-2.5 shadow-lg border border-border flex flex-col gap-2 min-w-[160px]">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider text-center">Demo</p>
+            <button onClick={triggerSimulation} className="interactive-primary flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium">
+              {quickActionLabel}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-function DashboardSection({ title, scanned, icon, waitingText, children, forceShow, onEdit }: DashboardSectionProps & { onEdit?: () => void }) {
+function DashboardSection({ title, scanned, icon, waitingText, children, forceShow, onEdit }: DashboardSectionProps) {
   return (
-    <section className={`flex flex-col rounded-3xl border bg-white/95 p-5 shadow-sm transition-all duration-500 overflow-hidden ${scanned ? 'border-[#11b5a2] ring-4 ring-[#eafaf7]' : 'border-[#d5e2ea]'}`}>
+    <section className={`flex flex-col rounded-xl border bg-card p-4 shadow-sm transition-all duration-500 overflow-hidden ${scanned ? "border-secondary" : "border-border"}`}>
       <div className="flex items-center justify-between mb-4 shrink-0">
-        <h2 className="text-sm font-semibold tracking-tight text-[#0b4867]">{title}</h2>
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
         <div className="flex items-center gap-2">
           {scanned && (
-            <button 
+            <button
               onClick={onEdit}
-              className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-slate-400 hover:text-[#1378ac] hover:border-[#1378ac] transition-colors"
+              className="interactive-muted flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium uppercase tracking-wide"
             >
-              <Pencil className="w-2.5 h-2.5" />
+              <Pencil className="size-3" />
               Modifier
             </button>
           )}
-          {scanned && <span className="rounded-lg bg-[#eafaf7] px-2 py-0.5 text-[9px] font-semibold uppercase text-[#0b786e]">✓</span>}
+          {scanned && (
+            <span className="rounded-full border border-secondary/20 bg-secondary-muted px-2.5 py-0.5 text-[10px] font-medium uppercase text-secondary">
+              Validé
+            </span>
+          )}
         </div>
       </div>
-      
+
       {!scanned && !forceShow ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] text-slate-400 p-4">
-          <div className="text-3xl opacity-50">{icon}</div>
-          <p className="font-bold text-[9px] uppercase tracking-widest text-center">{waitingText}</p>
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted text-muted-foreground p-4">
+          <div className="opacity-50">{icon}</div>
+          <p className="text-[10px] font-medium uppercase tracking-wide text-center">{waitingText}</p>
         </div>
       ) : children}
     </section>
@@ -1044,89 +867,27 @@ function DashboardSection({ title, scanned, icon, waitingText, children, forceSh
 }
 
 function DataCard({ label, value, color }: DataCardProps) {
-  const styles = color === 'purple' 
-    ? { bg: 'bg-[#edf5f9]', text: 'text-[#1378ac]', border: 'border-[#b8cad6]' }
-    : { bg: 'bg-[#eafaf7]', text: 'text-[#0b786e]', border: 'border-[#bdece4]' };
-  
+  const isPrimary = color === "purple";
   return (
-    <div className={`rounded-2xl border p-4 shrink-0 ${styles.bg} ${styles.border}`}>
-      <p className={`mb-1 text-[8px] font-semibold uppercase tracking-[0.24em] ${styles.text}`}>{label}</p>
-      <p className="text-lg font-semibold tracking-tight text-[#0b4867]">{value}</p>
+    <div className={`rounded-lg border p-3 shrink-0 ${isPrimary ? "bg-primary-muted border-primary/20" : "bg-secondary-muted border-secondary/20"}`}>
+      <p className={`mb-1 text-[10px] font-medium uppercase tracking-wide ${isPrimary ? "text-primary" : "text-secondary"}`}>{label}</p>
+      <p className="text-base font-semibold text-foreground">{value}</p>
     </div>
   );
 }
 
 function StatusButton({ active, onClick, icon, label, color }: StatusButtonProps) {
-  const activeClass = color === 'emerald' ? 'border-[#11b5a2] bg-[#11b5a2] text-white shadow-md scale-105' : 'border-[#0b4867] bg-[#0b4867] text-white shadow-md scale-105';
   return (
-    <button onClick={onClick} className={`flex flex-col items-center gap-2 rounded-2xl border-2 p-5 transition-all ${active ? activeClass : 'border-[#d5e2ea] bg-white text-slate-400'}`}>
-      <span className="text-2xl">{icon}</span>
-      <span className="text-center text-[8px] font-bold uppercase tracking-[0.18em]">{label}</span>
+    <button onClick={onClick} className={`flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all ${
+      active
+        ? color === "emerald"
+          ? "border-secondary bg-secondary-muted text-secondary"
+          : "border-warning bg-warning-muted text-warning"
+        : "border-border bg-card text-muted-foreground hover:border-primary/40"
+    }`}>
+      {icon}
+      <span className="text-[10px] font-medium uppercase tracking-wide">{label}</span>
     </button>
   );
 }
 
-function TopOperatorPanel({ title, subtitle, confirmed, waitingText, name, role, onChangeUser }: TopOperatorPanelProps) {
-  return (
-    <section className={`rounded-3xl border bg-white/95 p-4 shadow-sm transition-all duration-500 ${confirmed ? "border-[#11b5a2] ring-4 ring-[#eafaf7]" : "border-[#d5e2ea]"}`}>
-      <div className="flex items-center justify-between shrink-0 mb-2">
-        <div className="flex items-center gap-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1378ac] text-[10px] font-semibold text-white shadow-md">03</span>
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold tracking-tight text-[#0b4867] truncate">{title}</h2>
-            <p className="text-[8px] font-black uppercase tracking-[0.16em] text-slate-400">{subtitle}</p>
-          </div>
-        </div>
-        {confirmed && (
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={onChangeUser}
-              className="flex items-center gap-1 text-[7px] font-black uppercase tracking-wider text-slate-400 hover:text-[#1378ac] transition-colors"
-            >
-              <UserMinus className="w-2.5 h-2.5" />
-              Changer
-            </button>
-            <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-2.5 py-1 text-[8px] font-semibold uppercase text-[#0b786e]">Validé</span>
-          </div>
-        )}
-      </div>
-      {!confirmed ? (
-        <div className="h-[55px] flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] text-slate-400 p-2 gap-1">
-          <p className="text-[8px] font-black uppercase tracking-[0.18em] mb-1">{waitingText.replaceAll(" ", "_").toUpperCase()}</p>
-          <input 
-            type="password"
-            placeholder="BADGE ID"
-            className="w-full bg-white border border-[#d5e2ea] rounded-lg py-1.5 px-3 text-[10px] text-center font-black tracking-widest focus:border-[#1378ac] outline-none"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                // Simulation of scan
-                (e.target as HTMLInputElement).blur();
-              }
-            }}
-          />
-        </div>
-      ) : (
-        <div className="rounded-2xl bg-[#0b4867] p-2.5 text-white animate-in zoom-in duration-300">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-[#0a3952] bg-[#1378ac] text-lg shadow-inner">👩‍🔬</div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold tracking-tight truncate">{name}</p>
-              <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-[#8de7da] truncate">{role}</p>
-            </div>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function CheckItem({ label, checked, onClick }: CheckItemProps) {
-  return (
-    <button onClick={onClick} className={`flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left transition-all shrink-0 ${checked ? 'border-[#11b5a2] bg-[#eafaf7] text-[#0b786e] shadow-sm' : 'border-[#d5e2ea] bg-white text-slate-400'}`}>
-      <div className={`flex h-4 w-4 items-center justify-center rounded border-2 transition-all ${checked ? 'border-[#11b5a2] bg-[#11b5a2] text-white' : 'border-[#cfdbe3]'}`}>
-        {checked && "✓"}
-      </div>
-      <span className="text-[9px] font-bold uppercase tracking-[0.1em]">{label}</span>
-    </button>
-  );
-}

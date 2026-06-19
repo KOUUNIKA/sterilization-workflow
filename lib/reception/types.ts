@@ -5,9 +5,10 @@ export type ReceptionSource =
 
 export type ReceptionRecord = {
   source: ReceptionSource;
-  tray_id: string;
-  transport_id: string;
-  agent_id: string;
-  pre_disinfection_status: boolean;
+  trayId: string;
+  transportId: string;
+  agentId: string;
+  preDisinfectionStatus: boolean;
+  cycleId?: string;
   timestamp: string;
 };
