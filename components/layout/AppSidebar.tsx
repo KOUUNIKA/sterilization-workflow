@@ -14,7 +14,6 @@ import {
   Layers,
   Flame,
   Archive,
-  Settings,
   LogOut,
   Cross,
 } from "lucide-react";
@@ -83,10 +82,7 @@ export function AppSidebar() {
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-white leading-none truncate">
-              Modoock Health
-            </p>
-            <p className="text-[10px] text-white/50 leading-none mt-0.5">
-              Stérilisation Suite
+              Modoock Stérilisation
             </p>
           </div>
         </Link>
@@ -132,13 +128,6 @@ export function AppSidebar() {
             </p>
           </div>
         </div>
-        <Link
-          to="/maintenance"
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-white/60 hover:bg-white/10 hover:text-white transition-colors"
-        >
-          <Settings className="size-4" />
-          <span>Paramètres</span>
-        </Link>
         <button
           onClick={logout}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-white/60 hover:bg-white/10 hover:text-white transition-colors"
