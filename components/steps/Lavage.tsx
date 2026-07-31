@@ -1,24 +1,19 @@
 "use client";
 
-import { type ReactNode, useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { 
-  Pencil, 
-  RotateCcw, 
-  Trash2, 
-  UserMinus, 
-  AlertCircle, 
-  ChevronLeft,
+import { type ReactNode, useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { useFooterActions } from "@/contexts/FooterActionsContext";
+import {
+  Pencil,
+  AlertCircle,
   CheckCircle2,
-  X
+  X,
 } from "lucide-react";
 
 type DashboardSectionProps = {
-  index: string;
   title: string;
   scanned: boolean;
-  icon: string;
-  waitingText: string;
   children: ReactNode;
   forceShow?: boolean;
 };
@@ -26,15 +21,13 @@ type DashboardSectionProps = {
 type DataCardProps = {
   label: string;
   value: string;
-  color: "emerald" | "blue";
 };
 
 type StatusButtonProps = {
   active: boolean;
   onClick: () => void;
-  icon: string;
   label: string;
-  color: "emerald" | "orange";
+  variant: "secondary" | "warning";
 };
 
 type CheckItemProps = {
@@ -89,7 +82,17 @@ interface LavageWizardProps {
 export function LavageWizard({ initialPhase = 1, onPhaseChange, onValidated }: LavageWizardProps) {
   const [phase, setPhase] = useState<1 | 2>(initialPhase); // 1: Chargement (Entrée), 2: Déchargement (Sortie)
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [qualified, setQualified] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/api/qualification/today?machineId=AUTOCLAVE-02")
+      .then((r) => r.json())
+      .then((d) => setQualified(!!d.qualified))
+      .catch(() => setQualified(false));
+  }, []);
   const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     setPhase(initialPhase);
@@ -115,9 +118,13 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange, onValidated }: L
     temperature: "",
     duration: "",
   });
-  const [operatorConfirmed, setOperatorConfirmed] = useState(false);
   const [laveurStatus, setLaveurStatus] = useState<"ready" | "maintenance">("ready");
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [loadedTrays, setLoadedTrays] = useState<string[]>([]);
+  const [trayScanInput, setTrayScanInput] = useState("");
 
   const isAutomaticOnly = washingModes.length === 1 && washingModes[0] === "AUTOMATIQUE";
   const includesManual = washingModes.includes("MANUEL");
@@ -149,15 +156,12 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange, onValidated }: L
     localStorage.setItem(
       WASHING_TRACE_STORAGE_KEY,
       JSON.stringify({
+        mode: washingModes.join(","),
+        machineCode: "LAVEUSE-01",
+        cycleName: isAutomaticOnly ? selectedAutoCycle : null,
+        temperature: includesUltrasons ? ultrasonicParameters.temperature : null,
+        duration: includesUltrasons ? ultrasonicParameters.duration : null,
         washing_mode: activeWashingModeLabels,
-        selected_cycle: isAutomaticOnly ? selectedAutoCycle : null,
-        ultrasonic_parameters: includesUltrasons
-          ? {
-              temperature_c: ultrasonicParameters.temperature,
-              duration_min: ultrasonicParameters.duration,
-            }
-          : null,
-        manual_protocol: includesManual ? manualChecks : null,
         laveur_status: isAutomaticOnly ? laveurStatus : null,
         updated_at: new Date().toISOString(),
       }),
@@ -181,12 +185,12 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange, onValidated }: L
       setSelectedAutoCycle(AUTO_CYCLE_DEFAULT);
       setManualChecks({ dosage: false, brushing: false, rinsing: false });
       setUltrasonicParameters({ temperature: "", duration: "" });
-      setOperatorConfirmed(false);
       setLaveurStatus("ready");
+      setLoadedTrays([]);
+      setTrayScanInput("");
     } else {
       setSortieCycleValidated(false);
       setSortiePanierScanned(false);
-      setSortieOperatorConfirmed(false);
       setConformity({
         programme: false,
         parameters: false,
@@ -200,7 +204,6 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange, onValidated }: L
 
   const [sortieCycleValidated, setSortieCycleValidated] = useState(false);
   const [sortiePanierScanned, setSortiePanierScanned] = useState(false);
-  const [sortieOperatorConfirmed, setSortieOperatorConfirmed] = useState(false);
   const [conformity, setConformity] = useState({
     programme: false,
     parameters: false,
@@ -209,37 +212,99 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange, onValidated }: L
     cleanliness: false
   });
 
+  const handlePhase1Submit = async () => {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const res = await fetch("/api/lavage/load", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: washingModes.join(","),
+          machineCode: "LAVEUSE-01",
+          cycleName: isAutomaticOnly ? selectedAutoCycle : null,
+          temperature: includesUltrasons ? ultrasonicParameters.temperature : null,
+          duration: includesUltrasons ? ultrasonicParameters.duration : null,
+          operatorBadge: user?.badgeCode ?? "BADGE-001",
+          trays: loadedTrays,
+        }),
+      })
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string }
+        throw new Error(data.error ?? "Erreur serveur")
+      }
+      const { eventId } = (await res.json()) as { eventId: string }
+      navigate(`/lavage-sortie?eventId=${eventId}`)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Erreur inconnue")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handlePhase2Submit = async () => {
+    const eventId = searchParams.get("eventId")
+    if (!eventId) {
+      setSaveError("Session de lavage introuvable — recommencez depuis le chargement.")
+      return
+    }
+    setSaving(true)
+    setSaveError(null)
+    setSaved(false)
+    try {
+      const res = await fetch(`/api/lavage/${eventId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conformiteProgramme: conformity.programme,
+          conformiteParametres: conformity.parameters,
+          conformitePosition: conformity.dosage,
+          conformiteSiccite: conformity.stability,
+          conformiteVisuelle: conformity.cleanliness,
+          validatedByBadge: user?.badgeCode ?? "BADGE-001",
+        }),
+      })
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string }
+        throw new Error(data.error ?? "Erreur serveur")
+      }
+      setSaved(true)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Erreur inconnue")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const triggerSimulation = () => {
     if (phase === 1) {
-      if (!panierScanned) setPanierScanned(true);
+      if (!panierScanned) {
+        setPanierScanned(true);
+        if (loadedTrays.length === 0) setLoadedTrays(["TRAY-CHI-001"]);
+      }
       else if (!isAutomaticOnly) {
         if (!areCombinedProtocolsComplete) {
           setManualChecks({ dosage: true, brushing: true, rinsing: true });
           if (includesUltrasons) {
-            setUltrasonicParameters({
-              temperature: "45",
-              duration: "10",
-            });
+            setUltrasonicParameters({ temperature: "45", duration: "10" });
           }
-        } else if (!operatorConfirmed) setOperatorConfirmed(true);
+        }
       }
       else if (!laveurScanned) setLaveurScanned(true);
       else if (laveurStatus !== "ready") setLaveurStatus("ready");
-      else if (!operatorConfirmed) setOperatorConfirmed(true);
     } else {
       if (!sortieCycleValidated) {
         setConformity({ programme: true, parameters: true, dosage: true, stability: true, cleanliness: true });
         setSortieCycleValidated(true);
       }
       else if (!sortiePanierScanned) setSortiePanierScanned(true);
-      else if (!sortieOperatorConfirmed) setSortieOperatorConfirmed(true);
     }
   };
 
   const isPhase1Complete = isAutomaticOnly
-    ? panierScanned && laveurScanned && operatorConfirmed && laveurStatus === "ready"
-    : panierScanned && areCombinedProtocolsComplete && operatorConfirmed;
-  const isPhase2Complete = sortieCycleValidated && sortiePanierScanned && sortieOperatorConfirmed;
+    ? panierScanned && loadedTrays.length > 0 && laveurScanned && laveurStatus === "ready"
+    : panierScanned && loadedTrays.length > 0 && areCombinedProtocolsComplete;
+  const isPhase2Complete = sortieCycleValidated && sortiePanierScanned;
 
   useEffect(() => {
     onValidated?.(phase === 1 ? isPhase1Complete : isPhase2Complete);
@@ -251,74 +316,93 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange, onValidated }: L
         : !isAutomaticOnly
           ? !areCombinedProtocolsComplete
             ? "Completer le protocole"
-            : !operatorConfirmed
-              ? "Scanner le badge"
-              : null
+            : null
           : !laveurScanned
             ? "Scanner le laveur"
             : laveurStatus !== "ready"
               ? "Remettre le laveur pret"
-            : !operatorConfirmed
-              ? "Scanner le badge"
               : null
       : !sortieCycleValidated
         ? "Valider conformité"
         : !sortiePanierScanned
           ? "Scanner sortie"
-          : !sortieOperatorConfirmed
-            ? "Scanner badge"
-            : null;
-  const operatorState =
-    phase === 1
-      ? {
-          title: "Opérateur",
-          subtitle: "Entrée",
-          confirmed: operatorConfirmed,
-          name: "Dr. Karim ALAOUI",
-          role: "Responsable Lavage",
-        }
-      : {
-          title: "Responsable",
-          subtitle: "Sortie",
-          confirmed: sortieOperatorConfirmed,
-          name: "Salma BENANI",
-          role: "Responsable Déchargement",
-        };
+          : null;
+  const phaseSubmitRef = useRef<() => Promise<void>>(async () => {});
+  phaseSubmitRef.current = phase === 1 ? handlePhase1Submit : handlePhase2Submit;
+  const stableSubmit = useCallback(async () => { await phaseSubmitRef.current(); }, []);
+  const stableReset = useCallback(() => setShowResetConfirm(true), []);
+  const { setOverride } = useFooterActions();
+
+  useEffect(() => {
+    const isReady = phase === 1 ? isPhase1Complete : isPhase2Complete;
+    setOverride({
+      submitLabel: phase === 1 ? "Valider le chargement" : "Valider la sortie",
+      submittingLabel: "Enregistrement...",
+      doneLabel: "Étape suivante",
+      onSubmit: stableSubmit,
+      isReady,
+      isSubmitting: saving,
+      isDone: saved,
+      onReset: stableReset,
+      saveError,
+    });
+    return () => setOverride(null);
+  }, [phase, isPhase1Complete, isPhase2Complete, saving, saved, saveError, stableSubmit, stableReset, setOverride]);
+
+  if (qualified === null) return (
+    <div className="flex flex-1 items-center justify-center py-20">
+      <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+    </div>
+  );
+  if (!qualified) return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 py-20 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-warning-muted border border-warning/20">
+        <AlertCircle className="size-8 text-warning" />
+      </div>
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">Qualification requise</h2>
+        <p className="mt-1 text-sm text-muted-foreground">La qualification journalière du stérilisateur n&apos;a pas encore été effectuée.</p>
+      </div>
+      <button onClick={() => navigate("/qualification")} className="interactive-primary flex items-center gap-2 rounded-lg px-6 py-2.5 text-xs font-medium uppercase tracking-wide">
+        Aller à la qualification
+      </button>
+    </div>
+  );
 
   return (
-    <div className="h-full flex flex-col gap-4 text-slate-900 overflow-hidden">
-      <header className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr] shrink-0">
-        <section className="rounded-3xl border border-[#d5e2ea] bg-white/95 p-4 shadow-sm">
+    <div className="h-full flex flex-col gap-4 text-foreground overflow-hidden">
+      <header className="shrink-0">
+        <section className="rounded-xl border border-border bg-card p-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="space-y-1">
-              <div className="inline-flex items-center rounded-full border border-[#b8cad6] bg-[#edf5f9] px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.24em] text-[#1378ac]">
-                Phase 03 • Nettoyage
+              <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary-muted px-3 py-1 text-xs font-medium text-primary">
+                Phase 03 · Nettoyage
               </div>
-              <h1 className="text-xl font-semibold tracking-tight text-[#0b4867]">
+              <h1 className="text-lg font-semibold text-foreground">
                 {phase === 1 ? "Entrée Laveur" : "Sortie Laveur"}
               </h1>
             </div>
-
-            <div className="flex rounded-xl border border-[#d5e2ea] bg-white/95 p-1 shadow-sm shrink-0">
+            <div className="flex rounded-lg border border-border bg-muted p-1 shrink-0">
               <button
                 onClick={() => handlePhaseChange(1)}
-                className={`px-4 py-2 rounded-lg text-[9px] font-semibold uppercase tracking-[0.2em] transition-all ${location.pathname === "/lavage-chargement" ? 'bg-[#1378ac] text-white shadow-md' : 'text-slate-400 hover:text-[#0b4867]'}`}
+                className={`px-4 py-2 rounded-md text-xs font-medium uppercase tracking-wide transition-all ${location.pathname === "/lavage-chargement" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
               >
                 Chargement
               </button>
               <button
                 onClick={() => handlePhaseChange(2)}
-                className={`px-4 py-2 rounded-lg text-[9px] font-semibold uppercase tracking-[0.2em] transition-all ${location.pathname === "/lavage-sortie" ? 'bg-[#11b5a2] text-white shadow-md' : 'text-slate-400 hover:text-[#0b4867]'}`}
+                disabled={phase === 1 && !searchParams.get("eventId")}
+                className={`px-4 py-2 rounded-md text-xs font-medium uppercase tracking-wide transition-all disabled:opacity-40 disabled:cursor-not-allowed ${location.pathname === "/lavage-sortie" ? "bg-secondary text-secondary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
               >
                 Déchargement
               </button>
             </div>
           </div>
-          
+
           {phase === 1 && (
-            <div className="mt-4 border-t border-slate-100 pt-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Mode de Lavage :</p>
-              <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="mt-4 border-t border-border pt-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3">Mode de lavage</p>
+              <div className="grid gap-2 md:grid-cols-3">
                 {WASHING_MODE_OPTIONS.map((option) => {
                   const selected = washingModes.includes(option.value);
                   return (
@@ -326,188 +410,188 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange, onValidated }: L
                       key={option.value}
                       type="button"
                       onClick={() => toggleWashingMode(option.value)}
-                      className={`rounded-2xl border-2 px-4 py-3 text-left transition-all ${
-                        selected
-                          ? "border-[#1378ac] bg-[#1378ac] text-white shadow-lg shadow-[#1378ac]/20"
-                          : "border-[#d5e2ea] bg-white text-slate-500 hover:border-[#1378ac]/30 hover:text-[#1378ac]"
+                      className={`rounded-lg border-2 px-3 py-2.5 text-left transition-all ${
+                        selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:border-primary/30"
                       }`}
                     >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-all ${
-                            selected
-                              ? "border-white bg-white text-[#1378ac]"
-                              : "border-[#cfdbe3] bg-[#f8fbfd] text-transparent"
-                          }`}
-                        >
-                          ✓
+                      <div className="flex items-start gap-2">
+                        <div className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border-2 text-[10px] transition-all ${
+                          selected ? "border-primary-foreground bg-primary-foreground/20 text-primary-foreground" : "border-border"
+                        }`}>
+                          {selected && "✓"}
                         </div>
                         <div>
-                          <p className="text-[10px] font-black uppercase tracking-[0.2em]">{option.label}</p>
-                          <p className={`mt-1 text-[11px] font-semibold ${selected ? "text-white/85" : "text-slate-400"}`}>
-                            {option.description}
-                          </p>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide">{option.label}</p>
+                          <p className={`mt-0.5 text-xs ${selected ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{option.description}</p>
                         </div>
                       </div>
                     </button>
                   );
                 })}
               </div>
-              <p className="mt-2 text-[10px] font-semibold text-slate-400">
-                Au moins un mode doit rester actif. `AUTOMATIQUE` reste exclusif, tandis que `MANUEL` et `ULTRASONS` peuvent etre combines.
+              <p className="mt-2 text-xs text-muted-foreground">
+                AUTOMATIQUE est exclusif. MANUEL et ULTRASONS peuvent être combinés.
               </p>
             </div>
           )}
         </section>
 
-        <TopOperatorPanel
-          title={operatorState.title}
-          subtitle={operatorState.subtitle}
-          confirmed={operatorState.confirmed}
-          waitingText="Scanner le badge"
-          name={operatorState.name}
-          role={operatorState.role}
-          onChangeUser={() => phase === 1 ? setOperatorConfirmed(false) : setSortieOperatorConfirmed(false)}
-        />
       </header>
+
+      {phase === 1 && (
+        <div className="shrink-0 flex items-center px-1">
+          <StepNode label="Panier" done={panierScanned} active={!panierScanned} />
+          <div className={`flex-1 h-px transition-colors ${panierScanned ? "bg-primary" : "bg-border"}`} />
+          <StepNode
+            label={isAutomaticOnly ? "Laveur" : "Protocole"}
+            done={isAutomaticOnly ? laveurScanned : areCombinedProtocolsComplete}
+            active={panierScanned && !(isAutomaticOnly ? laveurScanned : areCombinedProtocolsComplete)}
+          />
+        </div>
+      )}
+      {phase === 2 && (
+        <div className="shrink-0 flex items-center px-1">
+          <StepNode label="Conformité" done={sortieCycleValidated} active={!sortieCycleValidated} />
+          <div className={`flex-1 h-px transition-colors ${sortieCycleValidated ? "bg-primary" : "bg-border"}`} />
+          <StepNode label="Traçabilité" done={sortiePanierScanned} active={sortieCycleValidated && !sortiePanierScanned} />
+        </div>
+      )}
 
       <div className="flex-1 grid gap-4 lg:grid-cols-2 min-h-0 overflow-hidden">
         {phase === 1 && (
           <>
-            <DashboardSection 
-              index="01" 
-              title={isAutomaticOnly ? "Panier" : "Scan Instruments"} 
-              scanned={panierScanned} 
-              icon={isAutomaticOnly ? "🛒" : "🔍"} 
-              waitingText={isAutomaticOnly ? "Scanner le panier" : "Scanner Instrument/Panier"}
+            <DashboardSection
+              title={isAutomaticOnly ? "Panier" : "Scan Instruments"}
+              scanned={panierScanned}
               onEdit={() => setPanierScanned(false)}
             >
-              <div className="flex flex-col h-full space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
-                <DataCard label={isAutomaticOnly ? "ID Panier" : "ID Instrument / Lot"} value="PAN-2026-X8" color="blue" />
+              <div className="flex flex-col h-full space-y-3 animate-in fade-in duration-300 overflow-hidden">
                 {!isAutomaticOnly && (
-                  <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 flex items-center gap-3">
-                    <AlertCircle className="w-4 h-4 text-orange-500" />
-                    <p className="text-[9px] font-black text-orange-700 uppercase tracking-tight">
-                      {includesManual && includesUltrasons ? "Protocole combine thermo-sensible active" : "Protocole thermo-sensible requis"}
+                  <div className="bg-warning-muted border border-warning/20 rounded-lg p-3 flex items-center gap-2">
+                    <AlertCircle className="size-4 text-warning shrink-0" />
+                    <p className="text-xs font-medium text-warning">
+                      {includesManual && includesUltrasons ? "Protocole combiné thermo-sensible actif" : "Protocole thermo-sensible requis"}
                     </p>
                   </div>
                 )}
-                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(i => (
-                      <div key={i} className="rounded-lg border border-[#d5e2ea] bg-[#f8fbfd] p-3 text-center">
-                        <p className="text-[7px] font-bold text-slate-400 uppercase">Inst. {i}</p>
-                        <p className="text-[11px] font-bold text-[#1378ac]">x{i + 1}</p>
-                      </div>
-                    ))}
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Plateaux chargés</p>
+                  <div className="flex gap-2">
+                    <input
+                      value={trayScanInput}
+                      onChange={(e) => setTrayScanInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const ref = trayScanInput.trim().toUpperCase();
+                          if (ref && !loadedTrays.includes(ref)) setLoadedTrays((p) => [...p, ref]);
+                          setTrayScanInput("");
+                        }
+                      }}
+                      placeholder="Scanner ou saisir le plateau"
+                      className="w-full rounded-lg border border-border bg-muted px-3 py-2.5 text-sm font-medium text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary focus:bg-card"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ref = trayScanInput.trim().toUpperCase();
+                        if (ref && !loadedTrays.includes(ref)) setLoadedTrays((p) => [...p, ref]);
+                        setTrayScanInput("");
+                      }}
+                      disabled={!trayScanInput.trim()}
+                      className="interactive-primary rounded-lg px-3 py-2.5 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Ajouter
+                    </button>
                   </div>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                  {loadedTrays.length === 0 ? (
+                    <div className="flex items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted py-6">
+                      <p className="text-xs font-medium text-muted-foreground">Aucun plateau chargé</p>
+                    </div>
+                  ) : (
+                    loadedTrays.map((ref) => (
+                      <div key={ref} className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="size-4 text-secondary" />
+                          <p className="text-sm font-semibold text-foreground">{ref}</p>
+                        </div>
+                        <button type="button" onClick={() => setLoadedTrays((p) => p.filter((t) => t !== ref))} className="interactive-muted rounded-md p-1">
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </DashboardSection>
 
-            <DashboardSection 
-              index="02" 
-              title={
-                isAutomaticOnly
-                  ? "Laveur"
-                  : includesManual && includesUltrasons
-                    ? "Protocoles combines"
-                    : includesUltrasons
-                      ? "Bain a ultrasons"
-                      : "Protocole manuel"
-              } 
-              scanned={isAutomaticOnly ? laveurScanned : areCombinedProtocolsComplete} 
-              icon={isAutomaticOnly ? "⚙️" : "🧼"} 
-              waitingText={isAutomaticOnly ? "Scanner le laveur" : "Validation protocole"}
+            <DashboardSection
+              title={isAutomaticOnly ? "Laveur" : includesManual && includesUltrasons ? "Protocoles combinés" : includesUltrasons ? "Bain à ultrasons" : "Protocole manuel"}
+              scanned={isAutomaticOnly ? laveurScanned : areCombinedProtocolsComplete}
               onEdit={() => isAutomaticOnly ? setLaveurScanned(false) : (setManualChecks({ dosage: false, brushing: false, rinsing: false }), setUltrasonicParameters({ temperature: "", duration: "" }))}
               forceShow={!isAutomaticOnly}
             >
               {!isAutomaticOnly ? (
-                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="space-y-3 animate-in fade-in duration-300">
                   {includesManual && (
                     <>
-                      <CheckItem 
-                        label="Dosage detergent & Temp. eau" 
-                        checked={manualChecks.dosage} 
-                        onClick={() => setManualChecks({...manualChecks, dosage: !manualChecks.dosage})} 
-                      />
-                      <CheckItem 
-                        label="Brossage mecanique minutieux" 
-                        checked={manualChecks.brushing} 
-                        onClick={() => setManualChecks({...manualChecks, brushing: !manualChecks.brushing})} 
-                      />
-                      <CheckItem 
-                        label="Rincage abondant & sechage" 
-                        checked={manualChecks.rinsing} 
-                        onClick={() => setManualChecks({...manualChecks, rinsing: !manualChecks.rinsing})} 
-                      />
+                      <CheckItem label="Dosage détergent & Temp. eau" checked={manualChecks.dosage} onClick={() => setManualChecks({ ...manualChecks, dosage: !manualChecks.dosage })} />
+                      <CheckItem label="Brossage mécanique minutieux" checked={manualChecks.brushing} onClick={() => setManualChecks({ ...manualChecks, brushing: !manualChecks.brushing })} />
+                      <CheckItem label="Rinçage abondant & séchage" checked={manualChecks.rinsing} onClick={() => setManualChecks({ ...manualChecks, rinsing: !manualChecks.rinsing })} />
                     </>
                   )}
                   {includesUltrasons && (
-                    <div className="rounded-2xl border border-[#d5e2ea] bg-[#edf5f9] p-4 space-y-4">
-                      <div className="flex items-center justify-between gap-3">
+                    <div className="rounded-lg border border-primary/20 bg-primary-muted p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
                         <div>
-                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#1378ac]">Parametres Ultrasons</p>
-                          <p className="mt-1 text-[11px] font-semibold text-slate-500">
-                            Renseigner les conditions du bain pour assurer la tracabilite du protocole combine.
-                          </p>
+                          <p className="text-xs font-semibold text-primary">Paramètres Ultrasons</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">Conditions du bain pour la traçabilité.</p>
                         </div>
-                        <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] ${
-                          isUltrasonicProtocolComplete ? "bg-[#1378ac] text-white" : "bg-white text-slate-400 border border-[#d5e2ea]"
-                        }`}>
-                          {isUltrasonicProtocolComplete ? "Complete" : "En attente"}
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${isUltrasonicProtocolComplete ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground border border-border"}`}>
+                          {isUltrasonicProtocolComplete ? "Complété" : "En attente"}
                         </span>
                       </div>
-                      <div className="grid gap-3 md:grid-cols-2">
+                      <div className="grid gap-2 md:grid-cols-2">
                         <label className="block">
-                          <span className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">Temperature (°C)</span>
-                          <input
-                            type="number"
-                            min="0"
-                            value={ultrasonicParameters.temperature}
-                            onChange={(event) => setUltrasonicParameters({ ...ultrasonicParameters, temperature: event.target.value })}
-                            className="mt-2 w-full rounded-xl border border-[#d5e2ea] bg-white px-4 py-3 text-sm font-semibold text-[#0b4867] outline-none transition focus:border-[#1378ac]"
-                            placeholder="Ex: 45"
-                          />
+                          <span className="text-xs font-medium text-muted-foreground">Température (°C)</span>
+                          <input type="number" min="0" value={ultrasonicParameters.temperature}
+                            onChange={(e) => setUltrasonicParameters({ ...ultrasonicParameters, temperature: e.target.value })}
+                            className="mt-1.5 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground outline-none focus:border-primary"
+                            placeholder="Ex: 45" />
                         </label>
                         <label className="block">
-                          <span className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">Duree (min)</span>
-                          <input
-                            type="number"
-                            min="0"
-                            value={ultrasonicParameters.duration}
-                            onChange={(event) => setUltrasonicParameters({ ...ultrasonicParameters, duration: event.target.value })}
-                            className="mt-2 w-full rounded-xl border border-[#d5e2ea] bg-white px-4 py-3 text-sm font-semibold text-[#0b4867] outline-none transition focus:border-[#1378ac]"
-                            placeholder="Ex: 10"
-                          />
+                          <span className="text-xs font-medium text-muted-foreground">Durée (min)</span>
+                          <input type="number" min="0" value={ultrasonicParameters.duration}
+                            onChange={(e) => setUltrasonicParameters({ ...ultrasonicParameters, duration: e.target.value })}
+                            className="mt-1.5 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground outline-none focus:border-primary"
+                            placeholder="Ex: 10" />
                         </label>
                       </div>
                     </div>
                   )}
-                  <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl">
-                    <p className="text-[8px] font-black text-blue-600 uppercase tracking-widest text-center">
-                      {includesManual && includesUltrasons ? "Respecter les temps de contact et la sequence du bain a ultrasons" : "Respecter les temps de contact"}
+                  <div className="p-3 bg-muted border border-border rounded-lg">
+                    <p className="text-xs font-medium text-muted-foreground text-center">
+                      {includesManual && includesUltrasons ? "Respecter les temps de contact et la séquence du bain" : "Respecter les temps de contact"}
                     </p>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <DataCard label="Machine" value="LD-UNIT-02" color="emerald" />
+                <div className="space-y-3 animate-in fade-in duration-300">
+                  <DataCard label="Machine" value="LAVEUSE-01" />
                   <label className="block">
-                    <span className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">Cycle standard</span>
-                    <select
-                      value={selectedAutoCycle}
-                      onChange={(event) => setSelectedAutoCycle(event.target.value)}
-                      className="mt-2 w-full rounded-xl border border-[#d5e2ea] bg-white px-4 py-3 text-sm font-semibold text-[#0b4867] outline-none transition focus:border-[#1378ac]"
-                    >
+                    <span className="text-xs font-medium text-muted-foreground">Cycle standard</span>
+                    <select value={selectedAutoCycle} onChange={(e) => setSelectedAutoCycle(e.target.value)}
+                      className="mt-1.5 w-full rounded-lg border border-border bg-muted px-3 py-2.5 text-sm font-medium text-foreground outline-none focus:border-primary">
                       <option value="Cycle standard instruments">Cycle standard instruments</option>
                       <option value="Cycle microchirurgie">Cycle microchirurgie</option>
-                      <option value="Cycle rincage renforce">Cycle rincage renforce</option>
+                      <option value="Cycle rincage renforce">Cycle rinçage renforcé</option>
                     </select>
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <StatusButton active={laveurStatus === 'ready'} onClick={() => setLaveurStatus(laveurStatus === 'ready' ? 'maintenance' : 'ready')} color="emerald" icon="✅" label="Prêt" />
-                    <StatusButton active={laveurStatus === 'maintenance'} onClick={() => setLaveurStatus("maintenance")} color="orange" icon="🛠️" label="Maint." />
+                  <div className="grid grid-cols-2 gap-2">
+                    <StatusButton active={laveurStatus === "ready"} onClick={() => setLaveurStatus(laveurStatus === "ready" ? "maintenance" : "ready")} variant="secondary" label="Prêt" />
+                    <StatusButton active={laveurStatus === "maintenance"} onClick={() => setLaveurStatus("maintenance")} variant="warning" label="Maintenance" />
                   </div>
                 </div>
               )}
@@ -517,47 +601,46 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange, onValidated }: L
 
         {phase === 2 && (
           <>
-            <DashboardSection 
-              index="01" 
-              title="Conformité" 
-              scanned={sortieCycleValidated} 
-              icon="📋" 
-              waitingText="Vérification" 
-              forceShow
-              onEdit={() => setSortieCycleValidated(false)}
-            >
-              <div className="flex flex-col h-full space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
+            <DashboardSection title="Conformité" scanned={sortieCycleValidated} forceShow onEdit={() => setSortieCycleValidated(false)}>
+              <div className="flex flex-col h-full space-y-3 animate-in fade-in duration-300 overflow-hidden">
                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
-                  <CheckItem label="Conformite du programme : Utilisation du programme de nettoyage valide." checked={conformity.programme} onClick={() => setConformity({...conformity, programme: !conformity.programme})} />
-                  <CheckItem label="Parametres critiques : Temperature, A0, pression et dosages conformes." checked={conformity.parameters} onClick={() => setConformity({...conformity, parameters: !conformity.parameters})} />
-                  <CheckItem label="Positionnement de la charge : Materiel en position correcte." checked={conformity.dosage} onClick={() => setConformity({...conformity, dosage: !conformity.dosage})} />
-                  <CheckItem label="Siccite de la charge : Absence totale d'humidite residuelle." checked={conformity.stability} onClick={() => setConformity({...conformity, stability: !conformity.stability})} />
-                  <CheckItem label="Proprete visuelle : Absence de residus ou de souillures visibles." checked={conformity.cleanliness} onClick={() => setConformity({...conformity, cleanliness: !conformity.cleanliness})} />
+                  <CheckItem label="Conformité du programme : programme de nettoyage validé." checked={conformity.programme} onClick={() => setConformity({ ...conformity, programme: !conformity.programme })} />
+                  <CheckItem label="Paramètres critiques : température, A0, pression et dosages conformes." checked={conformity.parameters} onClick={() => setConformity({ ...conformity, parameters: !conformity.parameters })} />
+                  <CheckItem label="Positionnement de la charge : matériel en position correcte." checked={conformity.dosage} onClick={() => setConformity({ ...conformity, dosage: !conformity.dosage })} />
+                  <CheckItem label="Siccité de la charge : absence totale d'humidité résiduelle." checked={conformity.stability} onClick={() => setConformity({ ...conformity, stability: !conformity.stability })} />
+                  <CheckItem label="Propreté visuelle : absence de résidus ou de souillures." checked={conformity.cleanliness} onClick={() => setConformity({ ...conformity, cleanliness: !conformity.cleanliness })} />
                 </div>
-                <button 
+                <button
                   onClick={() => setSortieCycleValidated(true)}
-                  className={`shrink-0 w-full rounded-xl py-3 text-[10px] font-bold uppercase tracking-[0.2em] transition-all ${Object.values(conformity).every(v => v) ? 'bg-[#11b5a2] text-white shadow-md' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                  className={`shrink-0 w-full rounded-lg py-2.5 text-xs font-medium uppercase tracking-wide transition-all ${Object.values(conformity).every(v => v) ? "interactive-secondary" : "bg-muted text-muted-foreground cursor-not-allowed border border-border"}`}
                 >
                   Valider Conformité
                 </button>
               </div>
             </DashboardSection>
 
-            <DashboardSection 
-              index="02" 
-              title="Traçabilité" 
-              scanned={sortiePanierScanned} 
-              icon="🛒" 
-              waitingText="Scanner sortie"
-              onEdit={() => setSortiePanierScanned(false)}
-            >
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <DataCard label="Panier" value="PAN-2026-X8" color="blue" />
-                <div className="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-[#b8cad6] bg-[#edf5f9] p-6 text-center">
-                  <span className="text-3xl text-[#1378ac]">✓</span>
+            <DashboardSection title="Traçabilité" scanned={sortiePanierScanned} onEdit={() => setSortiePanierScanned(false)}>
+              <div className="space-y-3 animate-in fade-in duration-300">
+                {loadedTrays.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Plateaux lavés</p>
+                    {loadedTrays.map((ref) => (
+                      <div key={ref} className="flex items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2.5">
+                        <CheckCircle2 className="size-4 text-secondary shrink-0" />
+                        <p className="text-sm font-semibold text-foreground">{ref}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border-2 border-dashed border-border bg-muted p-4 text-center">
+                    <p className="text-xs font-medium text-muted-foreground">Aucun plateau enregistré</p>
+                  </div>
+                )}
+                <div className="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-primary/20 bg-primary-muted p-5 text-center">
+                  <CheckCircle2 className="size-6 text-primary" />
                   <div>
-                    <p className="text-[#1378ac] text-xs font-bold uppercase">Charge validée</p>
-                    <p className="mt-0.5 text-[8px] font-semibold text-slate-400 uppercase tracking-widest">Cycle LD-12333</p>
+                    <p className="text-xs font-semibold text-primary uppercase">Charge validée</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Cycle LD-12333</p>
                   </div>
                 </div>
               </div>
@@ -566,79 +649,31 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange, onValidated }: L
         )}
       </div>
 
-      {/* Footer Actions */}
-      <div className="shrink-0 flex items-center justify-between bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto gap-4">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-slate-50 hover:text-slate-600 active:scale-95"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Étape précédente
-          </button>
-          
-          <button
-            onClick={() => setShowResetConfirm(true)}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 transition-all hover:bg-red-50 hover:text-red-500 hover:border-red-100 active:scale-95"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Tout effacer
-          </button>
-        </div>
-
-        <button
-          onClick={() => {
-            if (phase === 1) handlePhaseChange(2);
-            else navigate("/recomposition");
-          }}
-          disabled={phase === 1 ? !isPhase1Complete : !isPhase2Complete}
-          className={`group relative flex items-center gap-3 rounded-xl px-12 py-3.5 text-[11px] font-black uppercase tracking-[0.22em] transition-all duration-300 shadow-xl ${
-            (phase === 1 ? isPhase1Complete : isPhase2Complete)
-              ? "bg-[#1378ac] text-white hover:bg-[#0f6a98] hover:-translate-y-0.5 active:scale-95"
-              : "bg-slate-100 text-slate-300 cursor-not-allowed border border-slate-200 shadow-none"
-          }`}
-        >
-          {(phase === 1 ? isPhase1Complete : isPhase2Complete) && <CheckCircle2 className="w-4 h-4" />}
-          Étape suivante
-        </button>
-      </div>
-
-      {/* Simulation Floating Button */}
       {quickActionLabel && (
-        <button
-          onClick={triggerSimulation}
-          className="fixed bottom-32 right-10 flex items-center gap-3 rounded-full bg-[#0b4867] px-6 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-2xl transition-all hover:bg-[#0a3952] hover:scale-105 active:scale-95 group z-[40]"
-        >
-          <span className="text-xl text-[#8de7da] animate-pulse">⌁</span>
-          <span>{quickActionLabel}</span>
-        </button>
+        <div className="fixed bottom-32 right-6 z-[100]">
+          <div className="bg-card rounded-xl p-2.5 shadow-lg border border-border flex flex-col gap-2 min-w-[160px]">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider text-center">Demo</p>
+            <button onClick={triggerSimulation} className="interactive-primary flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium">
+              {quickActionLabel}
+            </button>
+          </div>
+        </div>
       )}
 
-      {/* GLOBAL RESET CONFIRMATION MODAL */}
       {showResetConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowResetConfirm(false)} />
-          <div className="relative bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-300">
-            <div className="h-16 w-16 rounded-2xl bg-red-50 flex items-center justify-center text-red-500 mb-6 mx-auto">
-              <AlertCircle className="w-8 h-8" />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={() => setShowResetConfirm(false)} />
+          <div className="relative bg-card rounded-xl p-8 max-w-sm w-full shadow-lg border border-border animate-in zoom-in-95 duration-200">
+            <div className="size-14 rounded-xl bg-destructive/10 flex items-center justify-center text-destructive mb-5 mx-auto">
+              <AlertCircle className="size-7" />
             </div>
-            <h3 className="text-xl font-black text-slate-900 text-center uppercase tracking-tight mb-2">Tout effacer ?</h3>
-            <p className="text-sm font-bold text-slate-500 text-center leading-relaxed mb-8">
-              Êtes-vous sûr de vouloir effacer toutes les données d&apos;entrée pour ce cycle de lavage ?
+            <h3 className="text-lg font-semibold text-foreground text-center mb-2">Tout effacer ?</h3>
+            <p className="text-sm text-muted-foreground text-center leading-relaxed mb-6">
+              Êtes-vous sûr de vouloir effacer toutes les données pour ce cycle de lavage ?
             </p>
             <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setShowResetConfirm(false)}
-                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all active:scale-95"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleGlobalReset}
-                className="py-3.5 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-200 transition-all active:scale-95"
-              >
-                Confirmer
-              </button>
+              <button onClick={() => setShowResetConfirm(false)} className="interactive-muted py-2.5 rounded-lg text-xs font-medium uppercase tracking-wide">Annuler</button>
+              <button onClick={handleGlobalReset} className="interactive-danger py-2.5 rounded-lg text-xs font-medium uppercase tracking-wide">Confirmer</button>
             </div>
           </div>
         </div>
@@ -647,110 +682,75 @@ export function LavageWizard({ initialPhase = 1, onPhaseChange, onValidated }: L
   );
 }
 
-function DashboardSection({ index, title, scanned, icon, waitingText, children, forceShow, onEdit }: DashboardSectionProps & { onEdit?: () => void }) {
+function DashboardSection({ title, scanned, children, forceShow, onEdit }: DashboardSectionProps & { onEdit?: () => void }) {
   return (
-    <section className={`bg-white/95 p-5 rounded-3xl border shadow-sm transition-all duration-500 flex flex-col overflow-hidden ${scanned ? 'border-[#11b5a2] ring-4 ring-[#eafaf7]' : 'border-[#d5e2ea]'}`}>
+    <section className={`bg-card p-5 rounded-xl border shadow-sm transition-all duration-300 flex flex-col overflow-hidden ${scanned ? "border-secondary" : "border-border"}`}>
       <div className="mb-4 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1378ac] text-[10px] font-semibold text-white shadow-md">{index}</span>
-          <h2 className="text-sm font-semibold tracking-tight text-[#0b4867]">{title}</h2>
-        </div>
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
         <div className="flex items-center gap-2">
           {scanned && (
-            <button 
+            <button
               onClick={onEdit}
-              className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-slate-400 hover:text-[#1378ac] hover:border-[#1378ac] transition-colors"
+              className="interactive-muted flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium"
             >
-              <Pencil className="w-2.5 h-2.5" />
+              <Pencil className="size-3" />
               Modifier
             </button>
           )}
-          {scanned && <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-2 py-0.5 text-[8px] font-semibold uppercase text-[#0b786e]">Validé</span>}
+          {scanned && <span className="rounded-full border border-secondary/20 bg-secondary-muted px-2.5 py-0.5 text-[10px] font-medium uppercase text-secondary">Validé</span>}
         </div>
       </div>
-      
+
       {!scanned && !forceShow ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] text-slate-400 p-4">
-          <div className="text-3xl opacity-50">{icon}</div>
-          <p className="font-bold text-[9px] uppercase tracking-[0.2em] text-center">{waitingText}</p>
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted p-4">
+          <p className="text-xs font-medium text-muted-foreground text-center">En attente de scan</p>
         </div>
       ) : children}
     </section>
   );
 }
 
-function DataCard({ label, value, color }: DataCardProps) {
-  const styles = color === 'emerald' 
-    ? { bg: 'bg-[#eafaf7]', text: 'text-[#0b786e]', border: 'border-[#bdece4]' }
-    : { bg: 'bg-[#edf5f9]', text: 'text-[#1378ac]', border: 'border-[#b8cad6]' };
-  
+function DataCard({ label, value }: DataCardProps) {
   return (
-    <div className={`rounded-2xl border p-4 shrink-0 ${styles.bg} ${styles.border}`}>
-      <p className={`mb-1 text-[8px] font-semibold uppercase tracking-[0.24em] ${styles.text}`}>{label}</p>
-      <p className="text-lg font-semibold tracking-tight text-[#0b4867]">{value}</p>
+    <div className="rounded-lg border border-primary/20 bg-primary-muted p-4 shrink-0">
+      <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-primary">{label}</p>
+      <p className="text-base font-semibold text-foreground">{value}</p>
     </div>
   );
 }
 
-function StatusButton({ active, onClick, icon, label, color }: StatusButtonProps) {
-  const activeClass = color === 'emerald' ? 'border-[#11b5a2] bg-[#11b5a2] text-white shadow-md' : 'border-[#0b4867] bg-[#0b4867] text-white shadow-md';
+function StatusButton({ active, onClick, label, variant }: StatusButtonProps) {
+  const activeClass = variant === "secondary"
+    ? "border-secondary bg-secondary text-secondary-foreground"
+    : "border-warning bg-warning text-white";
   return (
-    <button onClick={onClick} className={`flex flex-col items-center gap-2 rounded-2xl border-2 p-4 transition-all ${active ? activeClass : 'border-[#d5e2ea] bg-white text-slate-400'}`}>
-      <span className="text-2xl">{icon}</span>
-      <span className="text-center text-[8px] font-bold uppercase tracking-[0.1em]">{label}</span>
+    <button onClick={onClick} className={`flex items-center justify-center rounded-lg border-2 px-3 py-2.5 text-xs font-medium uppercase tracking-wide transition-all ${active ? activeClass : "border-border bg-muted text-muted-foreground"}`}>
+      {label}
     </button>
   );
 }
 
-function TopOperatorPanel({ title, subtitle, confirmed, waitingText, name, role, onChangeUser }: any) {
+
+function StepNode({ label, done, active }: { label: string; done: boolean; active: boolean }) {
   return (
-    <section className={`rounded-3xl border bg-white/95 p-4 shadow-sm transition-all duration-500 ${confirmed ? "border-[#11b5a2] ring-4 ring-[#eafaf7]" : "border-[#d5e2ea]"}`}>
-      <div className="flex items-center justify-between shrink-0 mb-2">
-        <div className="flex items-center gap-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1378ac] text-[10px] font-semibold text-white shadow-md">03</span>
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold tracking-tight text-[#0b4867] truncate">{title}</h2>
-          </div>
-        </div>
-        {confirmed && (
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={onChangeUser}
-              className="flex items-center gap-1 text-[7px] font-black uppercase tracking-wider text-slate-400 hover:text-[#1378ac] transition-colors"
-            >
-              <UserMinus className="w-2.5 h-2.5" />
-              Changer
-            </button>
-            <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-2.5 py-1 text-[8px] font-semibold uppercase text-[#0b786e]">Validé</span>
-          </div>
-        )}
-      </div>
-      {!confirmed ? (
-        <div className="h-[55px] flex items-center justify-center rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] text-slate-400">
-          <p className="text-[9px] font-bold uppercase tracking-[0.18em]">{waitingText}</p>
-        </div>
-      ) : (
-        <div className="rounded-2xl bg-[#0b4867] p-2.5 text-white animate-in zoom-in duration-300">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-[#0a3952] bg-[#1378ac] text-lg shadow-inner">👩‍🔬</div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold tracking-tight truncate">{name}</p>
-              <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-[#8de7da] truncate">{role}</p>
-            </div>
-          </div>
-        </div>
-      )}
-    </section>
+    <div className="flex flex-col items-center gap-1.5 px-3">
+      <div className={`size-2.5 rounded-full border-2 transition-all ${
+        done ? "bg-primary border-primary" : active ? "bg-card border-primary ring-2 ring-primary/20" : "bg-card border-border"
+      }`} />
+      <span className={`text-[9px] font-medium uppercase tracking-wide whitespace-nowrap ${
+        done ? "text-primary" : active ? "text-foreground" : "text-muted-foreground"
+      }`}>{label}</span>
+    </div>
   );
 }
 
 function CheckItem({ label, checked, onClick }: CheckItemProps) {
   return (
-    <button onClick={onClick} className={`flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left transition-all shrink-0 ${checked ? 'border-[#11b5a2] bg-[#eafaf7] text-[#0b786e] shadow-sm' : 'border-[#d5e2ea] bg-white text-slate-400'}`}>
-      <div className={`flex h-4 w-4 items-center justify-center rounded border-2 transition-all ${checked ? 'border-[#11b5a2] bg-[#11b5a2] text-white' : 'border-[#cfdbe3]'}`}>
+    <button onClick={onClick} className={`flex w-full items-center gap-3 rounded-lg border-2 p-3 text-left transition-all shrink-0 ${checked ? "border-secondary bg-secondary-muted text-secondary" : "border-border bg-card text-muted-foreground"}`}>
+      <div className={`flex size-4 shrink-0 items-center justify-center rounded border-2 transition-all text-[10px] ${checked ? "border-secondary bg-secondary text-secondary-foreground" : "border-border"}`}>
         {checked && "✓"}
       </div>
-      <span className="text-[9px] font-bold uppercase tracking-[0.1em]">{label}</span>
+      <span className="text-xs font-medium">{label}</span>
     </button>
   );
 }

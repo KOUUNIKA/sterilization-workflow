@@ -1,0 +1,463 @@
+// Sterilization Workflow — Prisma Schema
+// SQLite for local development.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ============================================================
+// People & Access Control
+// ============================================================
+
+model Operator {
+  id        String   @id @default(cuid())
+  uuid      String   @unique @default(uuid())
+  badgeCode String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  roles           OperatorRole[]       @relation("OperatorRoles")
+  grantedRoles    OperatorRole[]       @relation("GrantedByOperator")
+  badgeScans      BadgeScan[]
+  events          Event[]
+  notes           WorkflowNote[]
+  washValidations WashCycle[]          @relation("WashValidatedBy")
+  qualBowieSigned DailyQualification[] @relation("QualBowieSigner")
+  qualLeakSigned  DailyQualification[] @relation("QualLeakSigner")
+  qualBioSigned   DailyQualification[] @relation("QualBioSigner")
+}
+
+model Role {
+  id          String  @id @default(cuid())
+  uuid        String  @unique @default(uuid())
+  name        String  @unique
+  description String?
+
+  privileges RolePrivilege[]
+  operators  OperatorRole[]
+}
+
+model Privilege {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  description String?
+
+  roles RolePrivilege[]
+}
+
+model RolePrivilege {
+  roleId      String
+  privilegeId String
+
+  role      Role      @relation(fields: [roleId], references: [id])
+  privilege Privilege @relation(fields: [privilegeId], references: [id])
+
+  @@id([roleId, privilegeId])
+}
+
+model OperatorRole {
+  operatorId   String
+  roleId       String
+  assignedAt   DateTime @default(now())
+  assignedById String
+
+  operator   Operator @relation("OperatorRoles", fields: [operatorId], references: [id])
+  role       Role     @relation(fields: [roleId], references: [id])
+  assignedBy Operator @relation("GrantedByOperator", fields: [assignedById], references: [id])
+
+  @@id([operatorId, roleId])
+}
+
+// ============================================================
+// Badge Scan (physical scan events — optional on writes)
+// ============================================================
+
+model BadgeScan {
+  id         String    @id @default(cuid())
+  operatorId String
+  scannedAt  DateTime  @default(now())
+  terminalId String
+  consumedAt DateTime?
+  eventType  String?
+
+  operator            Operator  @relation(fields: [operatorId], references: [id])
+  washCycleValidation WashCycle? @relation("WashValidatedBadgeScan")
+}
+
+// ============================================================
+// Notes (append-only, not a workflow step event)
+// ============================================================
+
+model WorkflowNote {
+  id        String   @id @default(cuid())
+  moduleKey String
+  content   String
+  authorId  String
+  createdAt DateTime @default(now())
+
+  author Operator @relation(fields: [authorId], references: [id])
+
+  @@index([moduleKey, createdAt])
+}
+
+// ============================================================
+// Master Catalogs
+// ============================================================
+
+model TrayType {
+  id             String  @id @default(cuid())
+  uuid           String  @unique @default(uuid())
+  code           String  @unique
+  label          String
+  department     String
+  maxInstruments Int?
+
+  trays       Tray[]
+  composition TrayTypeComposition[]
+}
+
+model InstrumentType {
+  id           String  @id @default(cuid())
+  uuid         String  @unique @default(uuid())
+  code         String  @unique
+  name         String
+  category     String
+  manufacturer String?
+  reference    String?
+
+  instruments Instrument[]
+  composition TrayTypeComposition[]
+}
+
+model TrayTypeComposition {
+  trayTypeId       String
+  instrumentTypeId String
+  expectedQuantity Int
+
+  trayType       TrayType       @relation(fields: [trayTypeId], references: [id])
+  instrumentType InstrumentType @relation(fields: [instrumentTypeId], references: [id])
+
+  @@id([trayTypeId, instrumentTypeId])
+}
+
+model Machine {
+  id       String @id @default(cuid())
+  uuid     String @unique @default(uuid())
+  code     String @unique
+  label    String
+  type     String // "VAPEUR" | "H2O2_PLASMA" | "WASHER"
+  location String
+
+  washCycles          WashCycle[]
+  sterilizationLoads  SterilizationLoad[]
+  qualifications      DailyQualification[]
+}
+
+// ============================================================
+// Physical Entities
+// ============================================================
+
+model Tray {
+  id           String @id @default(cuid())
+  uuid         String @unique @default(uuid())
+  serialNumber String @unique
+  typeId       String
+
+  type                     TrayType                  @relation(fields: [typeId], references: [id])
+  instruments              Instrument[]
+  receptionRecords         ReceptionRecord[]
+  washLoadItems            WashLoadItem[]
+  recompositionRecords     RecompositionRecord[]
+  sterilizationLoadItems   SterilizationLoadItem[]
+  sterilizationUnloadItems SterilizationUnloadItem[]
+}
+
+model Instrument {
+  id           String  @id @default(cuid())
+  uuid         String  @unique @default(uuid())
+  serialNumber String @unique
+  typeId       String
+  trayId       String
+
+  type               InstrumentType      @relation(fields: [typeId], references: [id])
+  tray               Tray                @relation(fields: [trayId], references: [id])
+  recompositionItems RecompositionItem[]
+}
+
+// ============================================================
+// H2O2 Subsystem
+// ============================================================
+
+model Cassette {
+  id             String   @id @default(cuid())
+  uuid           String   @unique @default(uuid())
+  lotNumber      String
+  serialNumber   String
+  insertionDate  DateTime
+  expiryDate     DateTime
+  dosesRemaining Int      @default(5)
+  dosesRequired  Int      @default(1)
+
+  sterilizationLoads SterilizationLoad[]
+  doseConsumptions   DoseConsumption[]
+}
+
+model DoseConsumption {
+  id          String   @id @default(cuid())
+  doseUsed    Int
+  usedAt      DateTime @default(now())
+  cassetteId  String
+  loadEventId String
+
+  cassette  Cassette          @relation(fields: [cassetteId], references: [id])
+  loadEvent SterilizationLoad @relation(fields: [loadEventId], references: [eventId])
+}
+
+// ============================================================
+// Event Base (class table inheritance)
+// One Event per workflow step write. operatorId = who acted.
+// ============================================================
+
+model Event {
+  id         String   @id @default(cuid())
+  type       String   // "PRE_DISINFECTION"|"RECEPTION"|"WASH"|"RECOMPOSITION"|"STERILIZATION_LOAD"|"STERILIZATION_UNLOAD"|"STORED"|"QUALIFICATION"
+  operatorId String
+  boiteRef   String?  // human-readable tray/box identifier from the frontend
+  place      String?
+  timestamp  DateTime @default(now())
+
+  operator Operator @relation(fields: [operatorId], references: [id])
+
+  preDesinfectionBatch PreDesinfectionBatch?
+  receptionRecord      ReceptionRecord?
+  washCycle            WashCycle?
+  recompositionRecord  RecompositionRecord?
+  sterilizationLoad    SterilizationLoad?
+  sterilizationUnload  SterilizationUnload?
+  sterileMovement      SterileMovement?
+  dailyQualification   DailyQualification?
+}
+
+// ============================================================
+// Step 2 — PreDesinfectionBatch
+// ============================================================
+
+model PreDesinfectionBatch {
+  eventId     String @id
+  cycleId     String
+  priority    String @default("standard")
+  detergent   String
+  dilution    String
+  dosage      String
+  waterVolume String
+  duration    String
+
+  event       Event             @relation(fields: [eventId], references: [id])
+  instruments InstrumentLine[]
+  receptions  ReceptionRecord[]
+
+  @@index([cycleId])
+}
+
+model InstrumentLine {
+  id          String  @id @default(cuid())
+  code        String?
+  name        String
+  designation String
+  quantity    Int
+  status      String  @default("expected")
+  batchId     String
+
+  batch PreDesinfectionBatch @relation(fields: [batchId], references: [eventId], onDelete: Cascade)
+}
+
+// ============================================================
+// Step 3 — ReceptionRecord
+// ============================================================
+
+model ReceptionRecord {
+  eventId                String  @id
+  source                 String  // "service-bloc" | "stock-sterile" | "externe"
+  transportId            String
+  trayRef                String  // scanned tray identifier (human-readable)
+  trayId                 String
+  preDisinfectionBatchId String?
+
+  event                Event                 @relation(fields: [eventId], references: [id])
+  tray                 Tray                  @relation(fields: [trayId], references: [id])
+  preDisinfectionBatch PreDesinfectionBatch? @relation(fields: [preDisinfectionBatchId], references: [eventId])
+}
+
+// ============================================================
+// Steps 4 & 5 — WashCycle
+// ============================================================
+
+model WashCycle {
+  eventId              String  @id
+  machineId            String
+  mode                 String  // "AUTOMATIQUE" | "MANUEL" | "ULTRASONS"
+  cycleName            String?
+  temperature          String?
+  duration             String?
+  conformiteProgramme  Boolean @default(false)
+  conformiteParametres Boolean @default(false)
+  conformitePosition   Boolean @default(false)
+  conformiteSiccite    Boolean @default(false)
+  conformiteVisuelle   Boolean @default(false)
+  validated            Boolean @default(false)
+  validatedById        String?
+  validatedBadgeScanId String? @unique
+
+  event              Event      @relation(fields: [eventId], references: [id])
+  machine            Machine    @relation(fields: [machineId], references: [id])
+  validatedBy        Operator?  @relation("WashValidatedBy", fields: [validatedById], references: [id])
+  validatedBadgeScan BadgeScan? @relation("WashValidatedBadgeScan", fields: [validatedBadgeScanId], references: [id])
+  loadItems          WashLoadItem[]
+}
+
+model WashLoadItem {
+  id          String @id @default(cuid())
+  trayRef     String
+  trayId      String
+  washEventId String
+
+  tray      Tray      @relation(fields: [trayId], references: [id])
+  washCycle WashCycle @relation(fields: [washEventId], references: [eventId], onDelete: Cascade)
+}
+
+// ============================================================
+// Step 6 — RecompositionRecord
+// ============================================================
+
+model RecompositionRecord {
+  eventId           String @id
+  trayId            String
+  targetDevice      String
+  packagingProtocol String
+
+  event Event               @relation(fields: [eventId], references: [id])
+  tray  Tray                @relation(fields: [trayId], references: [id])
+  items RecompositionItem[]
+}
+
+model RecompositionItem {
+  id            String  @id @default(cuid())
+  instrumentId  String
+  name          String
+  category      String
+  rackLocation  String
+  status        String  // "validated" | "missing" | "defective" | "pending"
+  justification String?
+  recordId      String
+
+  instrument Instrument          @relation(fields: [instrumentId], references: [id])
+  record     RecompositionRecord @relation(fields: [recordId], references: [eventId], onDelete: Cascade)
+}
+
+// ============================================================
+// Step 7 — SterilizationLoad
+// ============================================================
+
+model SterilizationLoad {
+  eventId           String  @id
+  machineId         String
+  sterilizationType String  // "vapeur" | "basse_temp"
+  cycleType         String  // "instruments" | "caoutchouc" | "Standard" | "Duo" | "Flex" | "Express"
+  targetTemp        String?
+  targetDuration    String?
+  cassetteId        String?
+
+  event            Event                   @relation(fields: [eventId], references: [id])
+  machine          Machine                 @relation(fields: [machineId], references: [id])
+  cassette         Cassette?               @relation(fields: [cassetteId], references: [id])
+  loadItems        SterilizationLoadItem[]
+  unloadEvents     SterilizationUnload[]
+  doseConsumptions DoseConsumption[]
+}
+
+model SterilizationLoadItem {
+  id          String  @id @default(cuid())
+  trayRef     String  // scanned package/tray identifier
+  trayId      String
+  loadEventId String
+
+  tray      Tray              @relation(fields: [trayId], references: [id])
+  loadEvent SterilizationLoad @relation(fields: [loadEventId], references: [eventId], onDelete: Cascade)
+}
+
+// ============================================================
+// Step 8 — SterilizationUnload
+// ============================================================
+
+model SterilizationUnload {
+  eventId     String @id
+  loadEventId String
+
+  event       Event                     @relation(fields: [eventId], references: [id])
+  loadEvent   SterilizationLoad         @relation(fields: [loadEventId], references: [eventId])
+  unloadItems SterilizationUnloadItem[]
+}
+
+model SterilizationUnloadItem {
+  id            String  @id @default(cuid())
+  trayRef       String  // scanned package/tray identifier
+  trayId        String
+  passageOk     Boolean @default(false)
+  physicoOk     Boolean @default(false)
+  sicciteOk     Boolean @default(false)
+  integriteOk   Boolean @default(false)
+  unloadEventId String
+
+  tray        Tray                @relation(fields: [trayId], references: [id])
+  unloadEvent SterilizationUnload @relation(fields: [unloadEventId], references: [eventId], onDelete: Cascade)
+}
+
+// ============================================================
+// Step 9 — SterileMovement (placement: room + shelf)
+// ============================================================
+
+model SterileMovement {
+  eventId String @id
+  room    String
+  shelf   String
+
+  event Event @relation(fields: [eventId], references: [id])
+}
+
+// ============================================================
+// Daily Qualification (Bowie-Dick + Étanchéité + IB)
+// Once per machine per day — blocks all downstream steps.
+// ============================================================
+
+model DailyQualification {
+  eventId  String @id
+  machineId String
+  date     String // "YYYY-MM-DD" — daily uniqueness key
+
+  bowieDickCaptured   Boolean @default(false)
+  bowieDickConfirmed  Boolean @default(false)
+  bowieDickSignedById String?
+
+  leakTicketName String?
+  leakTestStatus String  @default("pending") // "pending"|"valid"
+  leakSignedById String?
+
+  biologicalResult     String? // "NEGATIF"|"POSITIF"
+  biologicalStatus     String  @default("pending") // "pending"|"valid"|"critical"
+  biologicalSignedById String?
+
+  globalStatus String @default("pending") // "validated"|"failed"
+
+  event              Event     @relation(fields: [eventId], references: [id])
+  machine            Machine   @relation(fields: [machineId], references: [id])
+  bowieDickSignedBy  Operator? @relation("QualBowieSigner", fields: [bowieDickSignedById], references: [id])
+  leakSignedBy       Operator? @relation("QualLeakSigner",  fields: [leakSignedById],      references: [id])
+  biologicalSignedBy Operator? @relation("QualBioSigner",   fields: [biologicalSignedById], references: [id])
+
+  @@unique([machineId, date])
+}

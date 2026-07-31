@@ -1,64 +1,94 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ShieldAlert, ArrowRight } from "lucide-react";
+import { ShieldAlert, ArrowRight, Cross, AlertCircle } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function Login() {
   const navigate = useNavigate();
+  const { login } = useAuth();
+  const [username, setUsername] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError("");
+    setLoading(true);
+    const ok = await login(username);
+    setLoading(false);
+    if (ok) {
+      navigate("/dashboard");
+    } else {
+      setLoginError("Identifiant introuvable. Vérifiez votre identifiant et réessayez.");
+    }
+  };
 
   return (
-    <div className="h-screen w-screen flex items-center justify-center bg-[#0b4867] relative overflow-hidden font-app">
-      {/* Abstract Background Shapes */}
-      <div className="absolute top-[-100px] left-[-100px] w-80 h-80 bg-[#1378ac]/20 blur-[100px] rounded-full" />
-      <div className="absolute bottom-[-100px] right-[-100px] w-96 h-96 bg-[#11b5a2]/20 blur-[100px] rounded-full" />
-      
-      <div className="w-full max-w-md bg-white p-12 rounded-[3rem] shadow-2xl relative z-10 border border-white/20 backdrop-blur-md">
-        <div className="flex flex-col items-center gap-4 mb-10">
-          <div className="h-20 w-20 bg-[#1378ac] rounded-3xl flex items-center justify-center text-white text-4xl shadow-xl shadow-[#1378ac]/30">
-            🛡️
+    <div className="h-screen w-screen flex items-center justify-center bg-primary relative overflow-hidden">
+      <div className="absolute top-[-100px] left-[-100px] w-80 h-80 bg-white/5 blur-[100px] rounded-full" />
+      <div className="absolute bottom-[-100px] right-[-100px] w-96 h-96 bg-white/5 blur-[100px] rounded-full" />
+
+      <div className="w-full max-w-md bg-card p-10 rounded-xl border border-border shadow-lg relative z-10">
+        <div className="flex flex-col items-center gap-4 mb-8">
+          <div className="size-14 bg-primary rounded-xl flex items-center justify-center">
+            <Cross className="size-7 text-primary-foreground" />
           </div>
           <div className="text-center space-y-1">
-            <h1 className="text-2xl font-black text-[#0b4867] tracking-tight">Suite de Stérilisation</h1>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em]">Accès Sécurisé • V2.5.0</p>
+            <h1 className="text-xl font-semibold text-foreground tracking-tight">Suite de Stérilisation</h1>
+            <p className="text-xs text-muted-foreground">Modoock Health • Accès Sécurisé</p>
           </div>
         </div>
 
-        <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); navigate("/dashboard"); }}>
+        <form className="space-y-5" onSubmit={handleSubmit}>
           <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Identifiant</label>
-              <input 
-                type="text" 
-                placeholder="amina.benali" 
-                className="w-full bg-slate-50 border-2 border-[#d5e2ea] rounded-2xl p-4 text-xs font-black text-[#0b4867] focus:border-[#1378ac] outline-none transition-all placeholder:text-slate-300"
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Identifiant</label>
+              <input
+                type="text"
+                placeholder="Amina Benali"
+                value={username}
+                onChange={(e) => { setUsername(e.target.value); setLoginError(""); }}
+                className="w-full h-10 bg-muted border border-input rounded-lg px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary transition-all placeholder:text-muted-foreground"
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Mot de passe</label>
-              <input 
-                type="password" 
-                placeholder="••••••••" 
-                className="w-full bg-slate-50 border-2 border-[#d5e2ea] rounded-2xl p-4 text-xs font-black text-[#0b4867] focus:border-[#1378ac] outline-none transition-all placeholder:text-slate-300"
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Mot de passe</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                className="w-full h-10 bg-muted border border-input rounded-lg px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary transition-all placeholder:text-muted-foreground"
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-4 bg-orange-50 rounded-2xl border border-orange-100 mb-2">
-            <ShieldAlert className="w-4 h-4 text-orange-500 shrink-0" />
-            <p className="text-[9px] font-bold text-orange-600 uppercase tracking-wider">Session limitée à 8h • Zone Contrôlée</p>
-          </div>
+          {loginError ? (
+            <div className="flex items-center gap-3 p-3 bg-destructive/5 rounded-lg border border-destructive/20">
+              <AlertCircle className="size-4 text-destructive shrink-0" />
+              <p className="text-xs text-destructive font-medium">{loginError}</p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 p-3 bg-warning-muted rounded-lg border border-warning/20">
+              <ShieldAlert className="size-4 text-warning shrink-0" />
+              <p className="text-xs text-warning font-medium">Session limitée à 8h • Zone Contrôlée</p>
+            </div>
+          )}
 
-          <button 
+          <button
             type="submit"
-            className="w-full py-5 bg-[#1378ac] text-white rounded-2xl font-black uppercase tracking-[0.3em] text-[11px] shadow-lg shadow-[#1378ac]/20 hover:bg-[#0b4867] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
+            disabled={loading || !username.trim()}
+            className="interactive-primary w-full h-10 rounded-lg font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            S'authentifier
-            <ArrowRight className="w-5 h-5" />
+            {loading ? (
+              <span className="animate-pulse">Vérification...</span>
+            ) : (
+              <>S&apos;authentifier <ArrowRight className="size-4" /></>
+            )}
           </button>
         </form>
 
-        <p className="text-center mt-10 text-[9px] font-bold text-slate-300 uppercase tracking-widest">
+        <p className="text-center mt-8 text-xs text-muted-foreground">
           Modoock Health Digital Solutions © 2026
         </p>
       </div>

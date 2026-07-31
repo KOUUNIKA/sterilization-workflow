@@ -1,612 +1,535 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Clock3, History, MessageSquare } from "lucide-react";
+import { CheckCircle2, ChevronRight, Clock3, History, Package, Search, Wrench, X } from "lucide-react";
 
-type HistoryZone = "zone-sale" | "zone-propre" | "zone-sterile";
-type HistoryCriticality = "normal" | "urgent" | "risque";
-type TimeFilter = "all" | "today" | "last-4h" | "last-24h" | "custom-minutes";
+type ApiTray = { id: string; serialNumber: string; label: string };
 
-type HistoryStatus = "Active" | "Validé";
-
-type HistoryRow = {
+type InstrumentItem = {
   id: string;
-  boxId: string;
-  boxName: string;
-  zone: HistoryZone;
-  criticality: HistoryCriticality;
+  instrumentSerial: string;
+  name: string;
+  category: string;
+  status: "validated" | "missing" | "defective" | "pending";
+  justification: string | null;
+};
+
+type ApiEvent = {
+  id: string;
+  type: string;
   phase: string;
-  startTime: string;
-  status: HistoryStatus;
+  timestamp: string;
+  operator: string;
+  zone: "zone-sale" | "zone-propre" | "zone-sterile";
+  criticality: "normal" | "urgent" | "risque";
   details: string[];
-  agent: string;
-  note: string;
+  instruments?: InstrumentItem[];
 };
 
-const STORAGE_KEY = "workflow_history_notes";
-const WASHING_TRACE_STORAGE_KEY = "washing_cycle_trace";
-
-type WashingTrace = {
-  washing_mode?: string[];
-  selected_cycle?: string | null;
-  ultrasonic_parameters?: {
-    temperature_c?: string;
-    duration_min?: string;
-  } | null;
+type Cycle = {
+  cycleId: string;
+  index: number;
+  events: ApiEvent[];
+  startTime: string;
+  endTime: string | null;
+  status: "Terminé" | "En cours" | "Incomplet";
+  stepsCompleted: number;
 };
 
-const BASE_HISTORY_ROWS: HistoryRow[] = [
-  {
-    id: "phase-sterilisation",
-    boxId: "BOX-VISC-001",
-    boxName: "Boîte Petite Chirurgie Orthopédique #01",
-    zone: "zone-sterile",
-    criticality: "normal",
-    phase: "Stérilisation",
-    startTime: "2026-04-14T13:45:00",
-    status: "Active",
-    details: ["Cycle vapeur 134°C", "A0: 3120", "Charge: 6 plateaux"],
-    agent: "Amina Benali",
-    note: "",
-  },
-  {
-    id: "phase-conditionnement",
-    boxId: "BOX-VISC-001",
-    boxName: "Boîte Petite Chirurgie Orthopédique #01",
-    zone: "zone-propre",
-    criticality: "normal",
-    phase: "Conditionnement",
-    startTime: "2026-04-14T11:30:00",
-    status: "Validé",
-    details: ["Sachets scellés", "Indicateur interne vérifié", "Lot: COND-240414"],
-    agent: "Amina Benali",
-    note: "Indicateur chimique placé à l'intérieur.",
-  },
-  {
-    id: "phase-nettoyage",
-    boxId: "BOX-VISC-001",
-    boxName: "Boîte Petite Chirurgie Orthopédique #01",
-    zone: "zone-sale",
-    criticality: "normal",
-    phase: "Nettoyage",
-    startTime: "2026-04-14T09:05:00",
-    status: "Validé",
-    details: ["Laveur LD-02", "A0: 3250", "Détergent: Anioxyde"],
-    agent: "Salma Idrissi",
-    note: "",
-  },
-  {
-    id: "phase-reception",
-    boxId: "BOX-VISC-001",
-    boxName: "Boîte Petite Chirurgie Orthopédique #01",
-    zone: "zone-sale",
-    criticality: "urgent",
-    phase: "Réception",
-    startTime: "2026-04-14T08:20:00",
-    status: "Validé",
-    details: ["Transport: ARMOIRE-TRANS-01", "Bac: BAC-TREM-001", "H2O2 Area: 812 mg-sec/l"],
-    agent: "Amina Benali",
-    note: "",
-  },
-  {
-    id: "phase-sterilisation-box2",
-    boxId: "BOX-CELIO-002",
-    boxName: "Boîte CELIO #02",
-    zone: "zone-sterile",
-    criticality: "normal",
-    phase: "Stérilisation",
-    startTime: "2026-04-14T12:40:00",
-    status: "Active",
-    details: ["Cycle vapeur 134°C", "A0: 3050", "Charge: 4 plateaux"],
-    agent: "Salma Idrissi",
-    note: "",
-  },
-  {
-    id: "phase-conditionnement-box2",
-    boxId: "BOX-CELIO-002",
-    boxName: "Boîte CELIO #02",
-    zone: "zone-propre",
-    criticality: "normal",
-    phase: "Conditionnement",
-    startTime: "2026-04-14T11:00:00",
-    status: "Validé",
-    details: ["Sachet double", "Lot: COND-240414-B", "Indicateur interne OK"],
-    agent: "Salma Idrissi",
-    note: "",
-  },
+
+const ORDERED_STEPS = [
+  "RECEPTION",
+  "PRE_DISINFECTION",
+  "WASH",
+  "RECOMPOSITION",
+  "STERILIZATION_LOAD",
+  "STERILIZATION_UNLOAD",
+  "STORED",
 ];
 
-function formatStartTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "--:--";
-  return date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-}
+const INSTRUMENT_STATUS_CLASS: Record<string, string> = {
+  validated: "border-secondary/20 bg-secondary-muted text-secondary",
+  missing: "border-destructive/20 bg-destructive/5 text-destructive",
+  defective: "border-warning/20 bg-warning-muted text-warning",
+  pending: "border-border bg-muted text-muted-foreground",
+};
 
-function formatDuration(ms: number) {
-  const safeMs = Math.max(ms, 0);
-  const totalMinutes = Math.floor(safeMs / 60000);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
+function buildCycle(index: number, events: ApiEvent[]): Cycle {
+  const types = new Set(events.map((e) => e.type));
+  const storedEvent = events.find((e) => e.type === "STORED");
+  const receptionEvent = events.find((e) => e.type === "RECEPTION");
+  const anchor = receptionEvent ?? events.find((e) => e.type === "PRE_DISINFECTION") ?? events[0];
+  const cycleId = anchor ? `#${anchor.id.substring(0, 8).toUpperCase()}` : `#${index.toString().padStart(4, "0")}`;
 
-  if (hours > 0) {
-    return `${hours} h ${minutes.toString().padStart(2, "0")} min`;
+  let status: "Terminé" | "En cours" | "Incomplet";
+  if (storedEvent) {
+    status = "Terminé";
+  } else if (events.length > 1) {
+    status = "En cours";
+  } else {
+    status = "Incomplet";
   }
 
-  return `${totalMinutes} min`;
+  return {
+    cycleId,
+    index,
+    events: [...events].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    ),
+    startTime: receptionEvent?.timestamp ?? events[0].timestamp,
+    endTime: storedEvent?.timestamp ?? null,
+    status,
+    stepsCompleted: ORDERED_STEPS.filter((t) => types.has(t)).length,
+  };
+}
+
+// Split on STORED events: each STORED closes a cycle.
+// PRE_DISINFECTION has an earlier timestamp than its linked RECEPTION, so
+// splitting on RECEPTION would misattribute PRE_DISINFECTION to the wrong cycle.
+function groupIntoCycles(events: ApiEvent[]): Cycle[] {
+  const ascending = [...events].reverse();
+  const cycles: Cycle[] = [];
+  let current: ApiEvent[] = [];
+
+  for (const e of ascending) {
+    current.push(e);
+    if (e.type === "STORED") {
+      cycles.push(buildCycle(cycles.length + 1, current));
+      current = [];
+    }
+  }
+  if (current.length > 0) {
+    cycles.push(buildCycle(cycles.length + 1, current));
+  }
+
+  return cycles.reverse();
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatDateTime(iso: string) {
+  return new Date(iso).toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export function HistoryView() {
-  const [now, setNow] = useState(() => new Date());
-  const [notes, setNotes] = useState<Record<string, string>>({});
-  const [washingTrace, setWashingTrace] = useState<WashingTrace | null>(null);
-  const [selectedRow, setSelectedRow] = useState<HistoryRow | null>(null);
-  const [draftNote, setDraftNote] = useState("");
-  const [selectedBoxId, setSelectedBoxId] = useState("BOX-VISC-001");
-  const [selectedZone, setSelectedZone] = useState<HistoryZone | "all">("all");
-  const [selectedCriticality, setSelectedCriticality] = useState<HistoryCriticality | "all">("all");
-  const [selectedTimeFilter, setSelectedTimeFilter] = useState<TimeFilter>("all");
-  const [customMinutes, setCustomMinutes] = useState("120");
+  const [trays, setTrays] = useState<ApiTray[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTraySerial, setSelectedTraySerial] = useState("");
+  const [events, setEvents] = useState<ApiEvent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedCycle, setSelectedCycle] = useState<Cycle | null>(null);
+  const [cycleFilter, setCycleFilter] = useState<"all" | "Terminé" | "En cours" | "Incomplet">("all");
+  const [expandedInstrumentEvents, setExpandedInstrumentEvents] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      setNotes(raw ? (JSON.parse(raw) as Record<string, string>) : {});
-    } catch {
-      setNotes({});
-    }
-
-    try {
-      const rawTrace = localStorage.getItem(WASHING_TRACE_STORAGE_KEY);
-      setWashingTrace(rawTrace ? (JSON.parse(rawTrace) as WashingTrace) : null);
-    } catch {
-      setWashingTrace(null);
-    }
+    fetch("/api/trays")
+      .then((r) => r.json())
+      .then((d: { trays: ApiTray[] }) => {
+        setTrays(d.trays);
+        if (d.trays.length > 0) setSelectedTraySerial(d.trays[0].serialNumber);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setNow(new Date());
-    }, 60000);
+    if (!selectedTraySerial) return;
+    setLoading(true);
+    setSelectedCycle(null);
+    fetch(`/api/history/tray/${encodeURIComponent(selectedTraySerial)}`)
+      .then((r) => r.json())
+      .then((d: { events: ApiEvent[] }) => setEvents(d.events ?? []))
+      .catch(() => setEvents([]))
+      .finally(() => setLoading(false));
+  }, [selectedTraySerial]);
 
-    return () => window.clearInterval(intervalId);
-  }, []);
+  useEffect(() => {
+    setExpandedInstrumentEvents(new Set());
+  }, [selectedCycle?.cycleId]);
 
-  const allRows = useMemo(() => {
-    return BASE_HISTORY_ROWS.map((row) => ({
-      ...row,
-      details:
-        row.phase === "Nettoyage" && washingTrace
-          ? buildCleaningDetails(row.details, washingTrace)
-          : row.details,
-      note: notes[row.id] ?? row.note,
-    }));
-  }, [notes, washingTrace]);
+  const selectedTray = trays.find((t) => t.serialNumber === selectedTraySerial) ?? null;
 
-  const boxOptions = useMemo(() => {
-    const uniqueBoxes = new Map<string, { id: string; name: string }>();
+  const filteredTrays = useMemo(() => {
+    if (!searchQuery.trim()) return trays;
+    const q = searchQuery.toLowerCase();
+    return trays.filter(
+      (t) =>
+        t.serialNumber.toLowerCase().includes(q) ||
+        t.label.toLowerCase().includes(q)
+    );
+  }, [trays, searchQuery]);
 
-    allRows.forEach((row) => {
-      if (!uniqueBoxes.has(row.boxId)) {
-        uniqueBoxes.set(row.boxId, { id: row.boxId, name: row.boxName });
-      }
+  const cycles = useMemo(() => groupIntoCycles(events), [events]);
+
+  const filteredCycles = useMemo(() => {
+    if (cycleFilter === "all") return cycles;
+    return cycles.filter((c) => c.status === cycleFilter);
+  }, [cycles, cycleFilter]);
+
+  const toggleInstruments = (eventId: string) => {
+    setExpandedInstrumentEvents((prev) => {
+      const next = new Set(prev);
+      if (next.has(eventId)) next.delete(eventId);
+      else next.add(eventId);
+      return next;
     });
-
-    return Array.from(uniqueBoxes.values());
-  }, [allRows]);
-
-  const rows = useMemo(() => {
-    return allRows.filter((row) => {
-      if (row.boxId !== selectedBoxId) return false;
-      if (selectedZone !== "all" && row.zone !== selectedZone) return false;
-      if (selectedCriticality !== "all" && row.criticality !== selectedCriticality) return false;
-
-      if (selectedTimeFilter === "all") return true;
-
-      const rowTime = new Date(row.startTime).getTime();
-      const nowTime = now.getTime();
-
-      if (selectedTimeFilter === "today") {
-        const rowDate = new Date(row.startTime);
-        return rowDate.toDateString() === now.toDateString();
-      }
-
-      if (selectedTimeFilter === "last-4h") {
-        return nowTime - rowTime <= 4 * 60 * 60 * 1000;
-      }
-
-      if (selectedTimeFilter === "last-24h") {
-        return nowTime - rowTime <= 24 * 60 * 60 * 1000;
-      }
-
-      if (selectedTimeFilter === "custom-minutes") {
-        const minutes = Number(customMinutes);
-        if (Number.isNaN(minutes) || minutes <= 0) return true;
-        return nowTime - rowTime <= minutes * 60 * 1000;
-      }
-
-      return true;
-    });
-  }, [allRows, customMinutes, now, selectedBoxId, selectedCriticality, selectedTimeFilter, selectedZone]);
-
-  const selectedBox = boxOptions.find((box) => box.id === selectedBoxId) ?? boxOptions[0] ?? null;
-
-  const openNote = (row: HistoryRow) => {
-    setSelectedRow(row);
-    setDraftNote(row.note);
   };
 
-  const saveNote = () => {
-    if (!selectedRow) return;
-
-    const nextNotes = {
-      ...notes,
-      [selectedRow.id]: draftNote.trim(),
-    };
-
-    setNotes(nextNotes);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextNotes));
-    setSelectedRow(null);
-  };
+  const metrics = [
+    { label: "Total cycles", value: String(cycles.length) },
+    { label: "Terminés", value: String(cycles.filter((c) => c.status === "Terminé").length) },
+    { label: "Boîte sélectionnée", value: selectedTraySerial || "—" },
+  ];
 
   return (
-    <div className="h-full flex flex-col gap-6 text-slate-900">
-      <section className="rounded-[2rem] border border-[#d5e2ea] bg-white/95 p-6 shadow-sm">
+    <div className="h-full flex flex-col gap-4">
+      {/* Header */}
+      <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#b8cad6] bg-[#edf5f9] px-3 py-1 text-[9px] font-black uppercase tracking-[0.24em] text-[#1378ac]">
+          <div className="space-y-1.5">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary-muted px-3 py-1 text-xs font-medium text-primary">
               <History className="h-3.5 w-3.5" />
               Vue Historique
             </div>
-            <h1 className="text-2xl font-black tracking-tight text-[#0b4867]">
-              Historique par boîte
-            </h1>
-            <p className="max-w-3xl text-sm font-medium text-slate-500">
-              Suivi détaillé des phases, paramètres techniques, durée par étape et notes opératoires pour chaque boîte.
-            </p>
+            <h1 className="text-xl font-semibold text-foreground">Traçabilité des boîtes</h1>
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <HistoryMetric label="Phases suivies" value={String(rows.length)} />
-            <HistoryMetric label="Étape active" value={rows[0]?.phase ?? "Aucune"} />
-            <HistoryMetric label="Boîte sélectionnée" value={selectedBox?.boxId ?? "--"} />
+          <div className="grid grid-cols-3 gap-3">
+            {metrics.map((m) => (
+              <div key={m.label} className="rounded-lg border border-border bg-muted px-4 py-3">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{m.label}</p>
+                <p className="mt-1 text-sm font-semibold text-foreground">{m.value}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="min-h-0 flex-1 rounded-[2rem] border border-[#d5e2ea] bg-white/95 shadow-sm overflow-hidden">
-        <div className="border-b border-[#d5e2ea] bg-[#f8fbfd] px-6 py-4">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#1378ac]">
-                  Table d&apos;historique
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-500">
-                  Calcul automatique de la durée dans chaque phase pour la boîte sélectionnée.
-                </p>
-              </div>
-              <div className="grid gap-3 md:grid-cols-[minmax(260px,340px)_minmax(260px,1fr)]">
-                <label className="block">
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                    Boîte
-                  </span>
-                  <select
-                    value={selectedBoxId}
-                    onChange={(event) => setSelectedBoxId(event.target.value)}
-                    className="mt-2 w-full rounded-2xl border border-[#d5e2ea] bg-white px-4 py-3 text-sm font-semibold text-[#0b4867] outline-none transition focus:border-[#1378ac]"
-                  >
-                    {boxOptions.map((box) => (
-                      <option key={box.id} value={box.id}>
-                        {box.name} ({box.id})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="rounded-2xl border border-[#d5e2ea] bg-white px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                    Identification
-                  </p>
-                  <p className="mt-1 text-sm font-black text-[#0b4867]">{selectedBox?.boxName ?? "Aucune boîte"}</p>
-                  <p className="mt-1 text-[11px] font-semibold text-slate-500">
-                    {selectedBox?.id ?? "--"} • Mise à jour {now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
-              </div>
+      {/* Main area: tray picker + cycle list */}
+      <div className="min-h-0 flex-1 flex gap-4">
+        {/* Tray picker */}
+        <section className="w-60 shrink-0 rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden">
+          <div className="shrink-0 p-3 border-b border-border">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Chercher une boîte…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-lg border border-border bg-muted pl-8 pr-3 py-2 text-xs font-medium text-foreground placeholder:text-muted-foreground outline-none focus:border-primary focus:bg-card"
+              />
             </div>
-
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#1378ac]">
-                Les filtres
+          </div>
+          <div className="overflow-y-auto flex-1">
+            {filteredTrays.length === 0 ? (
+              <p className="p-4 text-xs font-medium text-muted-foreground text-center">
+                Aucune boîte trouvée
               </p>
-              <div className="mt-3 grid gap-3 xl:grid-cols-3">
-                <div className="rounded-2xl border border-[#d5e2ea] bg-white px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                    Les filtres par zone
+            ) : (
+              filteredTrays.map((t) => (
+                <button
+                  key={t.serialNumber}
+                  type="button"
+                  onClick={() => {
+                    setSelectedTraySerial(t.serialNumber);
+                    setSearchQuery("");
+                  }}
+                  className={`w-full px-3 py-2.5 text-left transition-colors border-b border-border last:border-b-0 ${
+                    t.serialNumber === selectedTraySerial
+                      ? "bg-primary-muted"
+                      : "hover:bg-muted"
+                  }`}
+                >
+                  <p
+                    className={`text-xs font-semibold truncate ${
+                      t.serialNumber === selectedTraySerial ? "text-primary" : "text-foreground"
+                    }`}
+                  >
+                    {t.serialNumber}
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <FilterChip label="Toutes" active={selectedZone === "all"} onClick={() => setSelectedZone("all")} />
-                    <FilterChip label="Zone Sale" active={selectedZone === "zone-sale"} onClick={() => setSelectedZone("zone-sale")} />
-                    <FilterChip label="Zone Propre" active={selectedZone === "zone-propre"} onClick={() => setSelectedZone("zone-propre")} />
-                    <FilterChip label="Zone Stérile" active={selectedZone === "zone-sterile"} onClick={() => setSelectedZone("zone-sterile")} />
-                  </div>
-                </div>
+                  <p className="text-[10px] font-medium text-muted-foreground mt-0.5 truncate">
+                    {t.label}
+                  </p>
+                </button>
+              ))
+            )}
+          </div>
+        </section>
 
-                <div className="rounded-2xl border border-[#d5e2ea] bg-white px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                    Filtres Critiques (Urgent & Risque)
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <FilterChip label="Tous" active={selectedCriticality === "all"} onClick={() => setSelectedCriticality("all")} />
-                    <FilterChip label="Urgent" active={selectedCriticality === "urgent"} onClick={() => setSelectedCriticality("urgent")} />
-                    <FilterChip label="Risque" active={selectedCriticality === "risque"} onClick={() => setSelectedCriticality("risque")} />
-                    <FilterChip label="Normal" active={selectedCriticality === "normal"} onClick={() => setSelectedCriticality("normal")} />
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-[#d5e2ea] bg-white px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                    Filtres Temporels
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <FilterChip label="Tout" active={selectedTimeFilter === "all"} onClick={() => setSelectedTimeFilter("all")} />
-                    <FilterChip label="Aujourd'hui" active={selectedTimeFilter === "today"} onClick={() => setSelectedTimeFilter("today")} />
-                    <FilterChip label="4h" active={selectedTimeFilter === "last-4h"} onClick={() => setSelectedTimeFilter("last-4h")} />
-                    <FilterChip label="24h" active={selectedTimeFilter === "last-24h"} onClick={() => setSelectedTimeFilter("last-24h")} />
-                    <FilterChip label="Intervalle" active={selectedTimeFilter === "custom-minutes"} onClick={() => setSelectedTimeFilter("custom-minutes")} />
-                  </div>
-                  <div className="mt-3">
-                    <label className="block">
-                      <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                        Minutes pour l&apos;intervalle de recherche
-                      </span>
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        value={customMinutes}
-                        onChange={(event) => {
-                          setCustomMinutes(event.target.value);
-                          setSelectedTimeFilter("custom-minutes");
-                        }}
-                        className="mt-2 w-full rounded-2xl border border-[#d5e2ea] bg-[#f8fbfd] px-4 py-3 text-sm font-semibold text-[#0b4867] outline-none transition focus:border-[#1378ac] focus:bg-white"
-                        placeholder="Ex: 120"
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
+        {/* Cycle list */}
+        <section className="min-h-0 flex-1 rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden">
+          {/* Toolbar */}
+          <div className="shrink-0 px-4 py-3 border-b border-border flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-foreground truncate">
+                {selectedTray?.label ?? "Sélectionner une boîte"}
+              </p>
+              <p className="text-[10px] font-medium text-muted-foreground">
+                {selectedTraySerial || "—"}
+              </p>
+            </div>
+            <div className="flex rounded-lg border border-border bg-muted p-1 gap-1 shrink-0">
+              {(["all", "Terminé", "En cours", "Incomplet"] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setCycleFilter(f)}
+                  className={`px-3 py-1.5 rounded-md text-[10px] font-medium transition-colors ${
+                    cycleFilter === f
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {f === "all" ? "Tous" : f}
+                </button>
+              ))}
             </div>
           </div>
-        </div>
 
-        <div className="overflow-auto h-full">
-          <table className="w-full min-w-[1120px] text-left border-collapse">
-            <thead className="sticky top-0 z-10 border-b border-[#d5e2ea] bg-white">
-              <tr>
-                <th className="px-5 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Boîte</th>
-                <th className="px-5 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Zone</th>
-                <th className="px-5 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Priorité</th>
-                <th className="px-5 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Début</th>
-                <th className="px-5 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Phase</th>
-                <th className="px-5 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Statut</th>
-                <th className="px-5 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Détails</th>
-                <th className="px-5 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Durée dans l&apos;étape</th>
-                <th className="px-5 py-3 text-center text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Ajouter une note</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#edf5f9]">
-              {rows.map((row, index) => {
-                const previousRow = index === 0 ? null : rows[index - 1];
-                const durationTarget = previousRow ? new Date(previousRow.startTime) : now;
-                const durationMs = durationTarget.getTime() - new Date(row.startTime).getTime();
-                const isCurrentPhase = index === 0 && row.status === "Active";
-                const hasNote = row.note.trim().length > 0;
-                const noteEditable = row.status === "Active" || row.status === "Validé";
+          {/* Cycles */}
+          <div className="overflow-y-auto flex-1">
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="h-7 w-7 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+              </div>
+            ) : filteredCycles.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-3">
+                <Package className="size-8 text-muted-foreground/40" />
+                <p className="text-sm font-medium text-muted-foreground">
+                  {events.length === 0
+                    ? "Aucun cycle enregistré pour cette boîte"
+                    : "Aucun cycle ne correspond au filtre"}
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {filteredCycles.map((cycle) => (
+                  <CycleRow
+                    key={cycle.cycleId}
+                    cycle={cycle}
+                    selected={selectedCycle?.cycleId === cycle.cycleId}
+                    onClick={() =>
+                      setSelectedCycle(
+                        selectedCycle?.cycleId === cycle.cycleId ? null : cycle
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
 
-                return (
-                  <tr key={row.id} className="align-top transition-colors hover:bg-[#f8fbfd]">
-                    <td className="px-5 py-4">
-                      <div>
-                        <p className="text-sm font-black text-[#0b4867]">{row.boxId}</p>
-                        <p className="mt-1 text-[11px] font-semibold text-slate-400">{row.boxName}</p>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className="inline-flex rounded-full border border-[#d5e2ea] bg-[#f8fbfd] px-3 py-1 text-[10px] font-black text-slate-500">
-                        {row.zone === "zone-sale" ? "Zone Sale" : row.zone === "zone-propre" ? "Zone Propre" : "Zone Stérile"}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase ${
-                          row.criticality === "urgent"
-                            ? "border-amber-200 bg-amber-50 text-amber-700"
-                            : row.criticality === "risque"
-                              ? "border-red-200 bg-red-50 text-red-700"
-                              : "border-[#d5e2ea] bg-[#f8fbfd] text-slate-500"
-                        }`}
-                      >
-                        {row.criticality}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="text-sm font-black text-[#0b4867]">{formatStartTime(row.startTime)}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="text-sm font-black text-[#0b4867]">{row.phase}</p>
-                      <p className="mt-1 text-[11px] font-semibold text-slate-400">{row.agent}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${
-                          row.status === "Active"
-                            ? "border-[#1378ac]/20 bg-[#edf5f9] text-[#1378ac]"
-                            : "border-[#bdece4] bg-[#eafaf7] text-[#0b786e]"
-                        }`}
-                      >
-                        {row.status === "Validé" ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
-                        {row.status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="space-y-2">
-                        {row.details.map((detail) => (
-                          <div
-                            key={`${row.id}-${detail}`}
-                            className="inline-flex mr-2 rounded-full border border-[#d5e2ea] bg-[#f8fbfd] px-3 py-1 text-[10px] font-black text-slate-500"
-                          >
-                            {detail}
-                          </div>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      {isCurrentPhase ? (
-                        <span className="inline-flex items-center gap-2 rounded-full border border-[#1378ac]/20 bg-[#edf5f9] px-3 py-1 text-[10px] font-black text-[#1378ac] animate-pulse">
-                          En cours ({formatDuration(durationMs)})
-                        </span>
-                      ) : (
-                        <span className="text-sm font-black text-[#0b4867]">{formatDuration(durationMs)}</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-center">
-                      <button
-                        type="button"
-                        onClick={() => openNote(row)}
-                        className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition-all touch-manipulation ${
-                          hasNote
-                            ? "border-[#1378ac]/20 bg-[#1378ac] text-white shadow-lg shadow-[#1378ac]/20"
-                            : "border-slate-200 bg-white text-slate-300 hover:border-[#1378ac]/20 hover:text-[#1378ac]"
-                        } ${noteEditable ? "cursor-pointer" : "cursor-default"}`}
-                        aria-label={hasNote ? `Modifier la note de ${row.phase}` : `Ajouter une note à ${row.phase}`}
-                      >
-                        <MessageSquare className="h-4.5 w-4.5" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {selectedRow ? (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      {/* Cycle detail modal */}
+      {selectedCycle && (
+        <div className="fixed inset-0 z-[50] flex items-center justify-center p-4">
           <button
             type="button"
-            onClick={() => setSelectedRow(null)}
-            className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm"
-            aria-label="Fermer la note"
+            onClick={() => setSelectedCycle(null)}
+            className="absolute inset-0 bg-foreground/50 backdrop-blur-sm"
+            aria-label="Fermer"
           />
-          <div className="relative z-[101] w-full max-w-2xl rounded-[2rem] border border-[#d5e2ea] bg-white p-5 shadow-2xl sm:p-6">
-            <div className="flex items-start justify-between gap-4">
+          <div className="relative z-[51] w-full max-w-lg bg-card rounded-xl border border-border shadow-sm flex flex-col max-h-[80vh] animate-in zoom-in-95 duration-200">
+            {/* Modal header */}
+            <div className="shrink-0 flex items-center justify-between p-4 border-b border-border">
               <div>
-                <h2 className="text-xl font-black text-[#0b4867]">
-                  {`Note de l'étape : ${selectedRow.phase}`}
-                </h2>
-                <p className="mt-1 text-[11px] font-semibold text-slate-400">
-                  {selectedRow.boxName} • {selectedRow.boxId}
+                <p className="text-sm font-semibold text-foreground">
+                  {formatDateTime(selectedCycle.startTime)} — {selectedTray?.label ?? selectedTraySerial}
+                </p>
+                <p className="text-[10px] font-medium text-muted-foreground mt-0.5">
+                  {formatDate(selectedCycle.startTime)}
+                  {selectedCycle.endTime
+                    ? ` → ${formatDate(selectedCycle.endTime)}`
+                    : " · En cours"}
                 </p>
               </div>
-              <span className="rounded-full border border-[#d5e2ea] bg-[#f8fbfd] px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                {formatStartTime(selectedRow.startTime)}
-              </span>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              <label className="block">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                  Contenu
-                </span>
-                <textarea
-                  value={draftNote}
-                  onChange={(event) => setDraftNote(event.target.value)}
-                  rows={8}
-                  placeholder="Ajouter une note opératoire..."
-                  className="mt-2 min-h-[220px] w-full rounded-2xl border border-[#d5e2ea] bg-[#f8fbfd] px-4 py-4 text-base font-medium text-[#0b4867] outline-none transition placeholder:text-slate-400 focus:border-[#1378ac] focus:bg-white"
-                />
-              </label>
-            </div>
-
-            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
               <button
                 type="button"
-                onClick={() => setSelectedRow(null)}
-                className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+                onClick={() => setSelectedCycle(null)}
+                className="interactive-muted flex items-center justify-center size-8 rounded-lg"
               >
-                Annuler
+                <X className="size-4" />
               </button>
-              <button
-                type="button"
-                onClick={saveNote}
-                className="rounded-xl bg-[#1378ac] px-5 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-lg shadow-[#1378ac]/20 transition hover:bg-[#0f6a98]"
-              >
-                Enregistrer
-              </button>
+            </div>
+
+            {/* Event timeline */}
+            <div className="overflow-y-auto flex-1 p-4 space-y-3">
+              {selectedCycle.events.map((event, idx) => {
+                const isLast = idx === selectedCycle.events.length - 1;
+                const isRecompo =
+                  event.type === "RECOMPOSITION" &&
+                  event.instruments &&
+                  event.instruments.length > 0;
+                const instrumentsExpanded = expandedInstrumentEvents.has(event.id);
+
+                return (
+                  <div key={event.id} className="relative">
+                    {/* Vertical connector */}
+                    {!isLast && (
+                      <div className="absolute left-[12px] top-[26px] bottom-[-12px] w-px bg-border" />
+                    )}
+                    <div className="flex gap-3">
+                      {/* Step dot */}
+                      <div
+                        className={`shrink-0 mt-0.5 size-[26px] rounded-full flex items-center justify-center border-2 ${
+                          event.type === "STORED"
+                            ? "border-secondary bg-secondary-muted"
+                            : event.criticality === "risque"
+                              ? "border-destructive bg-destructive/5"
+                              : "border-primary bg-primary-muted"
+                        }`}
+                      >
+                        {event.type === "STORED" ? (
+                          <CheckCircle2 className="size-3 text-secondary" />
+                        ) : (
+                          <Clock3 className="size-3 text-primary" />
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0 pb-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-xs font-semibold text-foreground">{event.phase}</p>
+                          <p className="text-[10px] font-medium text-muted-foreground shrink-0">
+                            {formatDateTime(event.timestamp)}
+                          </p>
+                        </div>
+                        <p className="text-[10px] font-medium text-muted-foreground mt-0.5">
+                          {event.operator}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {event.details.map((d) => (
+                            <span
+                              key={d}
+                              className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                            >
+                              {d}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Instruments section for RECOMPOSITION */}
+                        {isRecompo && (
+                          <div className="mt-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleInstruments(event.id)}
+                              className="interactive-muted inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wide"
+                            >
+                              <Wrench className="size-3" />
+                              {instrumentsExpanded
+                                ? "Masquer instruments"
+                                : `Voir instruments (${event.instruments!.length})`}
+                            </button>
+
+                            {instrumentsExpanded && (
+                              <div className="mt-2 rounded-xl border border-border bg-muted overflow-hidden">
+                                {event.instruments!.map((inst) => (
+                                  <div
+                                    key={inst.id}
+                                    className="flex items-center gap-2 px-3 py-2 border-b border-border last:border-b-0"
+                                  >
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[10px] font-semibold text-foreground truncate">
+                                        {inst.name}
+                                      </p>
+                                      <p className="text-[9px] font-medium text-muted-foreground">
+                                        {inst.instrumentSerial} · {inst.category}
+                                      </p>
+                                    </div>
+                                    <span
+                                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-medium uppercase ${
+                                        INSTRUMENT_STATUS_CLASS[inst.status] ??
+                                        INSTRUMENT_STATUS_CLASS.pending
+                                      }`}
+                                    >
+                                      {inst.status}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
-      ) : null}
+      )}
+
     </div>
   );
 }
 
-function buildCleaningDetails(baseDetails: string[], washingTrace: WashingTrace) {
-  const details = [...baseDetails];
-
-  if (washingTrace.washing_mode?.length) {
-    details.unshift(`Mode: ${washingTrace.washing_mode.join(" + ")}`);
-  }
-
-  if (washingTrace.selected_cycle) {
-    details.push(`Cycle: ${washingTrace.selected_cycle}`);
-  }
-
-  if (washingTrace.ultrasonic_parameters) {
-    const { temperature_c, duration_min } = washingTrace.ultrasonic_parameters;
-
-    if (temperature_c) {
-      details.push(`Ultrasons: ${temperature_c}°C`);
-    }
-
-    if (duration_min) {
-      details.push(`Duree ultrasons: ${duration_min} min`);
-    }
-  }
-
-  return Array.from(new Set(details));
-}
-
-function HistoryMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[1.5rem] border border-[#d5e2ea] bg-[#f8fbfd] px-4 py-3">
-      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">{label}</p>
-      <p className="mt-1 text-sm font-black tracking-tight text-[#0b4867]">{value}</p>
-    </div>
-  );
-}
-
-function FilterChip({
-  label,
-  active,
+function CycleRow({
+  cycle,
+  selected,
   onClick,
 }: {
-  label: string;
-  active: boolean;
+  cycle: Cycle;
+  selected: boolean;
   onClick: () => void;
 }) {
+  const statusClass = {
+    Terminé: "border-secondary/20 bg-secondary-muted text-secondary",
+    "En cours": "border-primary/20 bg-primary-muted text-primary",
+    Incomplet: "border-warning/20 bg-warning-muted text-warning",
+  }[cycle.status];
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] transition ${
-        active
-          ? "border-[#1378ac] bg-[#1378ac] text-white shadow-lg shadow-[#1378ac]/20"
-          : "border-[#d5e2ea] bg-[#f8fbfd] text-slate-500 hover:border-[#1378ac]/30 hover:text-[#1378ac]"
+      className={`w-full px-4 py-3.5 text-left flex items-center gap-4 transition-colors ${
+        selected ? "bg-primary-muted" : "hover:bg-muted"
       }`}
     >
-      {label}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-xs font-semibold text-foreground">{formatDateTime(cycle.startTime)}</p>
+          <span className={`rounded-full border px-2 py-0.5 text-[9px] font-medium uppercase ${statusClass}`}>
+            {cycle.status}
+          </span>
+        </div>
+        <p className="text-[10px] font-medium text-muted-foreground mt-0.5">
+          {formatDate(cycle.startTime)}
+          {cycle.endTime ? ` → ${formatDate(cycle.endTime)}` : " → En cours"}
+        </p>
+        {/* Step progress bar */}
+        <div className="mt-1.5 flex items-center gap-1">
+          {ORDERED_STEPS.map((_, i) => (
+            <div
+              key={i}
+              className={`h-1 flex-1 rounded-full ${
+                i < cycle.stepsCompleted ? "bg-primary" : "bg-border"
+              }`}
+            />
+          ))}
+          <span className="ml-1 text-[9px] font-medium text-muted-foreground">
+            {cycle.stepsCompleted}/7
+          </span>
+        </div>
+      </div>
+
+      <ChevronRight
+        className={`shrink-0 size-4 text-muted-foreground transition-transform ${
+          selected ? "rotate-90" : ""
+        }`}
+      />
     </button>
   );
 }

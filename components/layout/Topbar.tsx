@@ -18,7 +18,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/sterilization-chargement": "Stérilisation (Entrée)",
   "/sterilization-sortie": "Stérilisation (Sortie)",
   "/storage-distribution": "Stockage & Distribution",
-  "/patient-liaison": "Liaison Patient",
+
   "/maintenance": "Maintenance",
 };
 

@@ -1,26 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { AlertCircle, BadgeCheck, CheckCircle2, ShieldCheck, Truck } from "lucide-react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { AlertCircle, CheckCircle2, Truck } from "lucide-react";
 import type { ReceptionRecord, ReceptionSource } from "@/lib/reception/types";
-
-type AgentDirectoryEntry = {
-  id: string;
-  name: string;
-  role: string;
-};
+import { useAuth } from "@/contexts/AuthContext";
+import { useFooterActions } from "@/contexts/FooterActionsContext";
 
 const SOURCE_OPTIONS: Array<{ value: ReceptionSource; label: string }> = [
   { value: "service-bloc", label: "Service / Bloc Opératoire" },
   { value: "stock-sterile", label: "Stock Stérile" },
   { value: "externe", label: "Externe (Neuf/Réparation)" },
 ];
-
-const AGENT_DIRECTORY: Record<string, AgentDirectoryEntry> = {
-  "BADGE-001": { id: "BADGE-001", name: "Amina Benali", role: "Agent Qualite" },
-  "BADGE-002": { id: "BADGE-002", name: "Youssef El Mansouri", role: "Agent Sterilisation" },
-  "BADGE-003": { id: "BADGE-003", name: "Salma Idrissi", role: "Superviseur de Quart" },
-};
 
 const DEFAULT_CYCLE_ID = "2026-0001";
 
@@ -49,25 +40,33 @@ async function saveReceptionRecord(record: ReceptionRecord) {
       payload: {
         module: "sterilization-reception",
         source: record.source,
-        tray_id: record.tray_id,
-        transport_id: record.transport_id,
-        agent_id: record.agent_id,
-        pre_disinfection_status: record.pre_disinfection_status,
+        trayId: record.trayId,
+        transportId: record.transportId,
+        agentId: record.agentId,
+        preDisinfectionStatus: record.preDisinfectionStatus,
       },
     }),
   });
 }
 
 export function SterilizationReception() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [qualified, setQualified] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/api/qualification/today?machineId=AUTOCLAVE-02")
+      .then((r) => r.json())
+      .then((d) => setQualified(!!d.qualified))
+      .catch(() => setQualified(false));
+  }, []);
+
   const [source, setSource] = useState<ReceptionSource | "">("");
   const [preDisinfectionStatus, setPreDisinfectionStatus] = useState(false);
   const [trayScanValue, setTrayScanValue] = useState("");
   const [trayId, setTrayId] = useState("");
   const [transportScanValue, setTransportScanValue] = useState("");
   const [transportId, setTransportId] = useState("");
-  const [agentScanValue, setAgentScanValue] = useState("");
-  const [agent, setAgent] = useState<AgentDirectoryEntry | null>(null);
-  const [agentScanError, setAgentScanError] = useState("");
   const [trayScanError, setTrayScanError] = useState("");
   const [transportScanError, setTransportScanError] = useState("");
   const [submitError, setSubmitError] = useState("");
@@ -82,12 +81,10 @@ export function SterilizationReception() {
       (!requiresPreDisinfection || preDisinfectionStatus) &&
       Boolean(trayId) &&
       Boolean(transportId) &&
-      Boolean(agent) &&
       !trayScanError &&
-      !transportScanError &&
-      !agentScanError
+      !transportScanError
     );
-  }, [agent, agentScanError, preDisinfectionStatus, requiresPreDisinfection, source, transportId, transportScanError, trayId, trayScanError]);
+  }, [preDisinfectionStatus, requiresPreDisinfection, source, transportId, transportScanError, trayId, trayScanError]);
 
   const resetForm = () => {
     setSource("");
@@ -96,27 +93,15 @@ export function SterilizationReception() {
     setTrayId("");
     setTransportScanValue("");
     setTransportId("");
-    setAgentScanValue("");
-    setAgent(null);
     setTrayScanError("");
     setTransportScanError("");
-    setAgentScanError("");
     setSubmitError("");
   };
 
-  const resetTransportAndAgentStep = () => {
+  const resetTransportStep = () => {
     setTransportScanValue("");
     setTransportId("");
     setTransportScanError("");
-    setAgentScanValue("");
-    setAgent(null);
-    setAgentScanError("");
-  };
-
-  const resetAgentStep = () => {
-    setAgentScanValue("");
-    setAgent(null);
-    setAgentScanError("");
   };
 
   const handleSourceSimulation = (nextSource: ReceptionSource) => {
@@ -124,7 +109,7 @@ export function SterilizationReception() {
     setTrayScanValue("");
     setTrayId("");
     setTrayScanError("");
-    resetTransportAndAgentStep();
+    resetTransportStep();
     setSuccessMessage("");
     setSubmitError("");
     if (nextSource !== "service-bloc") {
@@ -136,7 +121,7 @@ export function SterilizationReception() {
     const normalized = normalizeScan(trayScanValue);
     if (!normalized) return;
 
-    resetTransportAndAgentStep();
+    resetTransportStep();
     setTrayId(normalized);
     setTrayScanError("");
     setSubmitError("");
@@ -153,7 +138,6 @@ export function SterilizationReception() {
     const normalized = normalizeScan(transportScanValue);
     if (!normalized) return;
 
-    resetAgentStep();
     setTransportId(normalized);
     setTransportScanError("");
     setSubmitError("");
@@ -161,37 +145,8 @@ export function SterilizationReception() {
     setTransportScanValue("");
   };
 
-  const handleAgentScan = () => {
-    if (!trayId) {
-      setAgent(null);
-      setAgentScanError("Scannez d'abord le bac de trempage.");
-      return;
-    }
-
-    if (!transportId) {
-      setAgent(null);
-      setAgentScanError("Renseignez d'abord le moyen de transport.");
-      return;
-    }
-
-    const normalized = normalizeScan(agentScanValue);
-    if (!normalized) return;
-
-    const match = AGENT_DIRECTORY[normalized];
-    if (!match) {
-      setAgent(null);
-      setAgentScanError("Badge non reconnu. Veuillez rescanner un badge valide.");
-      return;
-    }
-
-    setAgent(match);
-    setAgentScanError("");
-    setSuccessMessage("");
-    setAgentScanValue("");
-  };
-
   const handleSubmit = async () => {
-    if (!isFormValid || !source || !agent || !trayId || !transportId) return;
+    if (!isFormValid || !source || !trayId || !transportId) return;
 
     setIsSubmitting(true);
     setSubmitError("");
@@ -199,10 +154,11 @@ export function SterilizationReception() {
 
     const record: ReceptionRecord = {
       source,
-      tray_id: trayId,
-      transport_id: transportId,
-      agent_id: agent.id,
-      pre_disinfection_status: requiresPreDisinfection ? preDisinfectionStatus : false,
+      trayId,
+      transportId,
+      agentId: user?.badgeCode ?? "BADGE-001",
+      preDisinfectionStatus: requiresPreDisinfection ? preDisinfectionStatus : false,
+      cycleId: DEFAULT_CYCLE_ID,
       timestamp: new Date().toISOString(),
     };
 
@@ -218,10 +174,10 @@ export function SterilizationReception() {
   };
 
   const simulateTrayStep = () => {
-    setTrayScanValue("BAC-TREM-001");
+    setTrayScanValue("TRAY-CHI-001");
     setTimeout(() => {
-      const normalized = normalizeScan("BAC-TREM-001");
-      resetTransportAndAgentStep();
+      const normalized = normalizeScan("TRAY-CHI-001");
+      resetTransportStep();
       setTrayId(normalized);
       setTrayScanError("");
       setSubmitError("");
@@ -235,7 +191,6 @@ export function SterilizationReception() {
     setTransportScanValue("ARMOIRE-TRANS-01");
     setTimeout(() => {
       const normalized = normalizeScan("ARMOIRE-TRANS-01");
-      resetAgentStep();
       setTransportId(normalized);
       setTransportScanError("");
       setSubmitError("");
@@ -244,39 +199,19 @@ export function SterilizationReception() {
     }, 0);
   };
 
-  const simulateAgentStep = () => {
-    if (!source) {
-      handleSourceSimulation("service-bloc");
-      setPreDisinfectionStatus(true);
-    } else if (requiresPreDisinfection && !preDisinfectionStatus) {
-      setPreDisinfectionStatus(true);
-    }
-
-    if (!trayId) {
-      const normalizedTray = normalizeScan("BAC-TREM-001");
-      setTrayId(normalizedTray);
-      setTrayScanValue("");
-      setTrayScanError("");
-    }
-
-    if (!transportId) {
-      const normalizedTransport = normalizeScan("ARMOIRE-TRANS-01");
-      setTransportId(normalizedTransport);
-      setTransportScanValue("");
-      setTransportScanError("");
-    }
-
-    const simulatedBadge = "BADGE-001";
-    setAgentScanValue(simulatedBadge);
-    setTimeout(() => {
-      const match = AGENT_DIRECTORY[simulatedBadge];
-      if (!match) return;
-      setAgent(match);
-      setAgentScanError("");
-      setSubmitError("");
-      setSuccessMessage("");
-      setAgentScanValue("");
-    }, 0);
+  const simulateAll = () => {
+    if (!source) handleSourceSimulation("service-bloc");
+    if (requiresPreDisinfection || !source) setPreDisinfectionStatus(true);
+    const normalizedTray = normalizeScan("TRAY-CHI-001");
+    setTrayId(normalizedTray);
+    setTrayScanValue("");
+    setTrayScanError("");
+    const normalizedTransport = normalizeScan("ARMOIRE-TRANS-01");
+    setTransportId(normalizedTransport);
+    setTransportScanValue("");
+    setTransportScanError("");
+    setSubmitError("");
+    setSuccessMessage("");
   };
 
   const originValidated = Boolean(source) && (!requiresPreDisinfection || preDisinfectionStatus);
@@ -289,65 +224,86 @@ export function SterilizationReception() {
         ? "Scanner le bac"
         : !transportId
           ? "Scanner le transport"
-          : !agent
-            ? "Scanner le badge"
-            : null;
+          : null;
 
   const triggerSimulation = () => {
     if (!source) handleSourceSimulation("service-bloc");
     else if (requiresPreDisinfection && !preDisinfectionStatus) setPreDisinfectionStatus(true);
     else if (!trayId) simulateTrayStep();
     else if (!transportId) simulateTransportStep();
-    else if (!agent) simulateAgentStep();
+    else simulateAll();
   };
 
+  const submitRef = useRef<() => Promise<void>>(async () => {});
+  submitRef.current = handleSubmit;
+  const stableSubmit = useCallback(async () => { await submitRef.current(); }, []);
+  const { setOverride } = useFooterActions();
+
+  useEffect(() => {
+    setOverride({
+      submitLabel: "Valider la réception",
+      submittingLabel: "Validation...",
+      doneLabel: "Étape suivante",
+      onSubmit: stableSubmit,
+      isReady: isFormValid && !isSubmitting,
+      isSubmitting: isSubmitting,
+      isDone: Boolean(successMessage),
+      saveError: submitError || null,
+    });
+    return () => setOverride(null);
+  }, [isFormValid, isSubmitting, submitError, successMessage, stableSubmit, setOverride]);
+
+  if (qualified === null) return (
+    <div className="flex flex-1 items-center justify-center py-20">
+      <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+    </div>
+  );
+  if (!qualified) return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 py-20 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-warning-muted border border-warning/20">
+        <AlertCircle className="size-8 text-warning" />
+      </div>
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">Qualification requise</h2>
+        <p className="mt-1 text-sm text-muted-foreground">La qualification journalière du stérilisateur n&apos;a pas encore été effectuée.</p>
+      </div>
+      <button onClick={() => navigate("/qualification")} className="interactive-primary flex items-center gap-2 rounded-lg px-6 py-2.5 text-xs font-medium uppercase tracking-wide">
+        Aller à la qualification
+      </button>
+    </div>
+  );
+
   return (
-    <div className="h-full flex flex-col gap-4 text-slate-900 overflow-hidden">
-      <header className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr] shrink-0">
-        <section className="rounded-3xl border border-[#d5e2ea] bg-white/95 p-4 shadow-sm">
+    <div className="h-full flex flex-col gap-4 text-foreground overflow-hidden">
+      <header className="shrink-0">
+        <section className="rounded-xl border border-border bg-card p-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="space-y-1">
-              <div className="inline-flex items-center rounded-full border border-[#b8cad6] bg-[#edf5f9] px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.24em] text-[#1378ac]">
-                Phase 02 • Reception
+              <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary-muted px-3 py-1 text-xs font-medium text-primary">
+                Phase 02 · Réception
               </div>
-              <h1 className="text-xl font-semibold tracking-tight text-[#0b4867]">
-                Réception
-              </h1>
-              <p className="max-w-2xl text-sm font-medium text-slate-500">
-                Controle d&apos;origine, verification physique du transport et tracabilite agent avant entree en zone sale.
-              </p>
+              <h1 className="text-lg font-semibold text-foreground">Réception</h1>
             </div>
-
-            <div className="grid grid-cols-3 gap-3">
+            <div className="flex gap-2 shrink-0">
               <InfoTile label="Cycle" value={DEFAULT_CYCLE_ID} />
-              <InfoTile label="Statut" value={isFormValid ? "Pret a valider" : "En attente"} />
-              <InfoTile label="Reception" value={successMessage ? "Validee" : "A traiter"} />
+              <InfoTile label="Statut" value={isFormValid ? "Prêt" : "En attente"} />
+              <InfoTile label="Réception" value={successMessage ? "Validée" : "À traiter"} />
             </div>
           </div>
         </section>
 
-        <ReceptionOperatorPanel
-          confirmed={Boolean(agent)}
-          waitingText="Scanner le badge"
-          helperText={transportId ? "Badge requis pour finaliser la reception." : "Disponible apres validation du moyen de transport."}
-          name={agent?.name ?? ""}
-          role={agent ? `${agent.role} • ${agent.id}` : ""}
-          onSimulate={simulateAgentStep}
-          onReset={resetAgentStep}
-        />
       </header>
 
+      <div className="shrink-0 flex items-center px-1">
+        <StepNode label="Origine & Pré-traitement" done={originValidated} active={!originValidated} />
+        <div className={`flex-1 h-px transition-colors ${originValidated ? "bg-primary" : "bg-border"}`} />
+        <StepNode label="Traçabilité" done={traceabilityValidated} active={originValidated && !traceabilityValidated} />
+      </div>
+
       <div className="flex-1 grid gap-4 lg:grid-cols-2 min-h-0 overflow-hidden">
-        <ReceptionSection
-          index="01"
-          title="Origine & Pre-traitement"
-          scanned={originValidated}
-          icon="🚚"
-          waitingText="Selectionner la source"
-          forceShow
-        >
-          <div className="flex flex-col h-full space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
-            <div className="grid gap-3 md:grid-cols-3">
+        <ReceptionSection title="Origine & Pré-traitement" scanned={originValidated}>
+          <div className="flex flex-col h-full space-y-4 animate-in fade-in duration-300 overflow-hidden">
+            <div className="grid gap-2 md:grid-cols-3">
               {SOURCE_OPTIONS.map((option) => {
                 const selected = source === option.value;
                 return (
@@ -355,16 +311,16 @@ export function SterilizationReception() {
                     key={option.value}
                     type="button"
                     onClick={() => handleSourceSimulation(option.value)}
-                    className={`rounded-2xl border-2 px-4 py-3 text-left transition-all ${
+                    className={`rounded-lg border-2 px-3 py-2.5 text-left transition-all ${
                       selected
-                        ? "border-[#1378ac] bg-[#1378ac] text-white shadow-lg shadow-[#1378ac]/20"
-                        : "border-[#d5e2ea] bg-white text-slate-500 hover:border-[#1378ac]/30 hover:text-[#1378ac]"
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground"
                     }`}
                   >
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em]">
-                      {option.value === "service-bloc" ? "Service / Bloc" : option.value === "stock-sterile" ? "Stock Sterile" : "Externe"}
+                    <p className="text-[10px] font-semibold uppercase tracking-wide">
+                      {option.value === "service-bloc" ? "Service / Bloc" : option.value === "stock-sterile" ? "Stock Stérile" : "Externe"}
                     </p>
-                    <p className={`mt-1 text-[11px] font-semibold ${selected ? "text-white/85" : "text-slate-400"}`}>
+                    <p className={`mt-0.5 text-xs ${selected ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
                       {option.label}
                     </p>
                   </button>
@@ -372,80 +328,55 @@ export function SterilizationReception() {
               })}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <DataCard label="Source retenue" value={source ? SOURCE_OPTIONS.find((option) => option.value === source)?.label ?? source : "Aucune source"} color="blue" />
-              <DataCard label="Cycle" value={DEFAULT_CYCLE_ID} color="emerald" />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <DataCard label="Source retenue" value={source ? SOURCE_OPTIONS.find((o) => o.value === source)?.label ?? source : "Aucune source"} variant="primary" />
+              <DataCard label="Cycle" value={DEFAULT_CYCLE_ID} variant="secondary" />
             </div>
 
             {requiresPreDisinfection ? (
-              <div className={`rounded-2xl border-2 p-4 transition-all ${
-                preDisinfectionStatus
-                  ? "border-[#11b5a2] bg-[#eafaf7]"
-                  : "border-[#d5e2ea] bg-[#f8fbfd]"
+              <div className={`rounded-xl border-2 p-4 transition-all ${
+                preDisinfectionStatus ? "border-secondary bg-secondary-muted" : "border-border bg-muted"
               }`}>
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start justify-between gap-4 mb-3">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#0b4867]">
-                      Controle complementaire
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-500">
-                      Validation de la pre-desinfection pour le materiel provenant du bloc.
-                    </p>
+                    <p className="text-xs font-semibold text-foreground">Contrôle complémentaire</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Validation de la pré-désinfection pour le matériel du bloc.</p>
                   </div>
-                  {preDisinfectionStatus ? (
-                    <span className="rounded-full border border-[#bdece4] bg-white px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-[#0b786e]">
-                      Validee
-                    </span>
-                  ) : null}
+                  {preDisinfectionStatus && (
+                    <span className="rounded-full border border-secondary/20 bg-card px-2.5 py-0.5 text-xs font-medium text-secondary">Validée</span>
+                  )}
                 </div>
-                <div className="mt-4 flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setPreDisinfectionStatus((value) => !value)}
-                    className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] transition-all ${
-                      preDisinfectionStatus
-                        ? "border-[#11b5a2] bg-[#11b5a2] text-white shadow-md"
-                        : "border-[#d5e2ea] bg-white text-slate-400"
+                    onClick={() => setPreDisinfectionStatus((v) => !v)}
+                    className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-medium uppercase tracking-wide transition-all ${
+                      preDisinfectionStatus ? "border-secondary bg-secondary text-secondary-foreground" : "border-border bg-card text-muted-foreground"
                     }`}
                   >
-                    <span className={`flex h-4 w-4 items-center justify-center rounded border-2 ${
-                      preDisinfectionStatus ? "border-white bg-white text-[#11b5a2]" : "border-[#cfdbe3]"
-                    }`}>
-                      ✓
-                    </span>
-                    Validation Pre-desinfection
+                    <span className={`flex size-4 items-center justify-center rounded border-2 text-[10px] ${
+                      preDisinfectionStatus ? "border-secondary-foreground bg-secondary-foreground/20 text-secondary-foreground" : "border-border"
+                    }`}>✓</span>
+                    Pré-désinfection
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setPreDisinfectionStatus(true)}
-                    className="rounded-xl border border-[#1378ac]/20 bg-[#edf5f9] px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#1378ac] transition hover:border-[#1378ac] hover:bg-white"
-                  >
+                  <button type="button" onClick={() => setPreDisinfectionStatus(true)} className="interactive-muted rounded-lg px-3 py-2 text-xs font-medium">
                     Simuler
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="rounded-2xl border border-[#d5e2ea] bg-[#f8fbfd] p-4">
+              <div className="rounded-xl border border-border bg-muted p-4">
                 <div className="flex items-start gap-3">
-                  <Truck className="mt-0.5 h-4 w-4 text-[#1378ac]" />
-                  <p className="text-sm font-medium text-slate-500">
-                    Aucun controle complementaire requis pour cette source. Poursuivre avec la tracabilite materielle.
-                  </p>
+                  <Truck className="mt-0.5 size-4 text-primary shrink-0" />
+                  <p className="text-sm text-muted-foreground">Aucun contrôle complémentaire requis. Poursuivre avec la traçabilité matérielle.</p>
                 </div>
               </div>
             )}
           </div>
         </ReceptionSection>
 
-        <ReceptionSection
-          index="02"
-          title="Tracabilite Reception"
-          scanned={traceabilityValidated}
-          icon="🧾"
-          waitingText="Scanner le bac"
-          forceShow
-        >
-          <div className="flex flex-col h-full space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
+        <ReceptionSection title="Traçabilité Réception" scanned={traceabilityValidated}>
+          <div className="flex flex-col h-full space-y-4 animate-in fade-in duration-300 overflow-hidden">
             <ScanField
               label="Identification du Bac (Trempage)"
               value={trayScanValue}
@@ -455,14 +386,8 @@ export function SterilizationReception() {
               isValidated={Boolean(trayId)}
               onSimulate={simulateTrayStep}
             />
-
-            <FieldSummary
-              label="Bac detecte"
-              value={trayId}
-              emptyValue="Aucun scan enregistre"
-            />
-
-            {trayScanError ? <StatusHint tone="error" message={trayScanError} /> : null}
+            <FieldSummary label="Bac détecté" value={trayId} emptyValue="Aucun scan enregistré" />
+            {trayScanError && <StatusHint tone="error" message={trayScanError} />}
 
             <ScanField
               label="Moyen de Transport"
@@ -474,180 +399,56 @@ export function SterilizationReception() {
               disabled={!trayId}
               onSimulate={simulateTransportStep}
             />
-
-            <FieldSummary
-              label="Transport detecte"
-              value={transportId}
-              emptyValue={trayId ? "Aucun transport enregistre" : "Disponible apres validation du bac"}
-            />
-
-            {transportScanError ? <StatusHint tone="error" message={transportScanError} /> : null}
+            <FieldSummary label="Transport détecté" value={transportId} emptyValue={trayId ? "Aucun transport enregistré" : "Disponible après validation du bac"} />
+            {transportScanError && <StatusHint tone="error" message={transportScanError} />}
           </div>
         </ReceptionSection>
       </div>
 
-      <div className="shrink-0 flex items-center justify-end bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-[#d5e2ea] shadow-lg mt-auto gap-4">
-        <div className="w-full max-w-md space-y-3">
-          {submitError ? <StatusHint tone="error" message={submitError} /> : null}
-          {successMessage ? <StatusHint tone="success" message={successMessage} /> : null}
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!isFormValid || isSubmitting}
-            className="w-full flex items-center justify-center gap-4 py-5 rounded-[1.5rem] font-black uppercase tracking-[0.2em] text-[11px] transition-all shadow-xl bg-[#11b5a2] text-white hover:-translate-y-1 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed disabled:border disabled:border-slate-200 disabled:shadow-none"
-          >
-            <CheckCircle2 className="h-5 w-5" />
-            {isSubmitting ? "Validation..." : "Valider la réception"}
-          </button>
+      {quickActionLabel && (
+        <div className="fixed bottom-32 right-6 z-[100]">
+          <div className="bg-card rounded-xl p-2.5 shadow-lg border border-border flex flex-col gap-2 min-w-[160px]">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider text-center">Demo</p>
+            <button onClick={triggerSimulation} className="interactive-primary flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium">
+              {quickActionLabel}
+            </button>
+          </div>
         </div>
-      </div>
-
-      {quickActionLabel ? (
-        <button
-          onClick={triggerSimulation}
-          className="fixed bottom-32 right-10 flex items-center gap-3 rounded-full bg-[#0b4867] px-6 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-2xl transition-all hover:bg-[#0a3952] hover:scale-105 active:scale-95 group z-[40]"
-        >
-          <span className="text-xl text-[#8de7da] animate-pulse">⌁</span>
-          <span>{quickActionLabel}</span>
-        </button>
-      ) : null}
+      )}
     </div>
   );
 }
 
 function ReceptionSection({
-  index,
   title,
   scanned,
-  icon,
-  waitingText,
   children,
-  forceShow,
 }: {
-  index: string;
   title: string;
   scanned: boolean;
-  icon: string;
-  waitingText: string;
   children: React.ReactNode;
-  forceShow?: boolean;
 }) {
   return (
-    <section className={`bg-white/95 p-5 rounded-3xl border shadow-sm transition-all duration-500 flex flex-col overflow-hidden ${
-      scanned ? "border-[#11b5a2] ring-4 ring-[#eafaf7]" : "border-[#d5e2ea]"
+    <section className={`bg-card p-5 rounded-xl border transition-all duration-300 flex flex-col overflow-hidden ${
+      scanned ? "border-secondary" : "border-border"
     }`}>
       <div className="mb-4 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1378ac] text-[10px] font-semibold text-white shadow-md">
-            {index}
-          </span>
-          <h2 className="text-sm font-semibold tracking-tight text-[#0b4867]">{title}</h2>
-        </div>
-        {scanned ? (
-          <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-2 py-0.5 text-[8px] font-semibold uppercase text-[#0b786e]">
-            Validé
-          </span>
-        ) : null}
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        {scanned && (
+          <span className="rounded-full border border-secondary/20 bg-secondary-muted px-2 py-0.5 text-xs font-medium text-secondary">Validé</span>
+        )}
       </div>
-
-      {!scanned && !forceShow ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] text-slate-400 p-4">
-          <div className="text-3xl opacity-50">{icon}</div>
-          <p className="font-bold text-[9px] uppercase tracking-[0.2em] text-center">{waitingText}</p>
-        </div>
-      ) : children}
+      {children}
     </section>
   );
 }
 
-function ReceptionOperatorPanel({
-  confirmed,
-  waitingText,
-  helperText,
-  name,
-  role,
-  onSimulate,
-  onReset,
-}: {
-  confirmed: boolean;
-  waitingText: string;
-  helperText: string;
-  name: string;
-  role: string;
-  onSimulate: () => void;
-  onReset: () => void;
-}) {
-  return (
-    <section className={`rounded-3xl border bg-white/95 p-4 shadow-sm transition-all duration-500 ${
-      confirmed ? "border-[#11b5a2] ring-4 ring-[#eafaf7]" : "border-[#d5e2ea]"
-    }`}>
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1378ac] text-[10px] font-semibold text-white shadow-lg">
-            03
-          </span>
-          <h2 className="text-sm font-semibold tracking-tight text-[#0b4867]">
-            Agent responsable
-          </h2>
-        </div>
-        {confirmed ? (
-          <span className="rounded-full border border-[#bdece4] bg-[#eafaf7] px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.18em] text-[#0b786e]">
-            Validé
-          </span>
-        ) : null}
-      </div>
-
-      {!confirmed ? (
-        <div className="space-y-3">
-          <div className="flex h-[78px] flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-[#d5e2ea] bg-[#f8fbfd] text-slate-400">
-            <p className="text-center text-[9px] font-bold uppercase tracking-[0.18em]">
-              {waitingText}
-            </p>
-          </div>
-          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-            {helperText}
-          </p>
-          <button
-            type="button"
-            onClick={onSimulate}
-            className="w-full py-3 rounded-xl bg-[#1378ac] text-white text-[10px] font-black uppercase tracking-[0.2em] shadow-md hover:bg-[#0f6a98] transition-all"
-          >
-            Simuler le badge
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <div className="rounded-2xl bg-[#0b4867] p-3 text-white">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-[#0a3952] bg-[#1378ac] text-lg shadow-inner">
-                👩‍🔬
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold tracking-tight truncate">{name}</p>
-                <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-[#8de7da] truncate">
-                  {role}
-                </p>
-              </div>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onReset}
-            className="w-full py-3 rounded-xl bg-white border border-slate-200 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] hover:text-[#1378ac] hover:border-[#1378ac] transition-all"
-          >
-            Changer d&apos;agent
-          </button>
-        </div>
-      )}
-    </section>
-  );
-}
 
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[1.5rem] border border-[#d5e2ea] bg-[#f8fbfd] px-4 py-3">
-      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">{label}</p>
-      <p className="mt-1 text-sm font-black tracking-tight text-[#0b4867]">{value}</p>
+    <div className="rounded-lg border border-border bg-muted px-2.5 py-2 min-w-0">
+      <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground truncate">{label}</p>
+      <p className="mt-0.5 text-xs font-semibold text-foreground whitespace-nowrap">{value}</p>
     </div>
   );
 }
@@ -676,43 +477,28 @@ function ScanField({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <label className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-          {label}
-        </label>
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</label>
         <div className="flex items-center gap-2">
-          {onSimulate ? (
-            <button
-              type="button"
-              onClick={onSimulate}
-              disabled={simulateDisabled}
-              className="rounded-xl border border-[#1378ac]/20 bg-[#edf5f9] px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#1378ac] transition hover:border-[#1378ac] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
+          {onSimulate && (
+            <button type="button" onClick={onSimulate} disabled={simulateDisabled}
+              className="interactive-muted rounded-lg px-2.5 py-1 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed">
               Simuler
             </button>
-          ) : null}
-          {isValidated ? <CheckCircle2 className="h-4 w-4 shrink-0 text-[#11b5a2]" /> : null}
+          )}
+          {isValidated && <CheckCircle2 className="size-4 shrink-0 text-secondary" />}
         </div>
       </div>
-      <div className="flex gap-3">
+      <div className="flex gap-2">
         <input
           value={value}
           disabled={disabled}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              onSubmit();
-            }
-          }}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSubmit(); } }}
           placeholder={placeholder}
-          className="w-full rounded-2xl border border-[#d5e2ea] bg-[#f8fbfd] px-4 py-3 text-sm font-semibold text-[#0b4867] outline-none transition placeholder:text-slate-400 focus:border-[#1378ac] focus:bg-white disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+          className="w-full rounded-lg border border-border bg-muted px-3 py-2.5 text-sm font-medium text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary focus:bg-card disabled:cursor-not-allowed disabled:opacity-50"
         />
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={disabled || !value.trim()}
-          className="rounded-2xl border border-[#1378ac]/20 bg-[#edf5f9] px-4 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-[#1378ac] transition hover:border-[#1378ac] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
+        <button type="button" onClick={onSubmit} disabled={disabled || !value.trim()}
+          className="interactive-primary rounded-lg px-4 py-2.5 text-xs font-medium uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed">
           Scanner
         </button>
       </div>
@@ -720,57 +506,50 @@ function ScanField({
   );
 }
 
-function FieldSummary({
-  label,
-  value,
-  emptyValue,
-}: {
-  label: string;
-  value: string;
-  emptyValue: string;
-}) {
+function FieldSummary({ label, value, emptyValue }: { label: string; value: string; emptyValue: string }) {
   return (
-    <div className="rounded-[1.5rem] border border-[#d5e2ea] bg-[#f8fbfd] p-4">
-      <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
-        {label}
-      </p>
-      <p className="mt-2 text-base font-black text-[#0b4867]">
-        {value || emptyValue}
-      </p>
+    <div className="rounded-lg border border-border bg-muted p-3">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-foreground">{value || emptyValue}</p>
     </div>
   );
 }
 
-function DataCard({ label, value, color }: { label: string; value: string; color: "emerald" | "blue" }) {
-  const styles = color === "emerald"
-    ? { bg: "bg-[#eafaf7]", text: "text-[#0b786e]", border: "border-[#bdece4]" }
-    : { bg: "bg-[#edf5f9]", text: "text-[#1378ac]", border: "border-[#b8cad6]" };
+function DataCard({ label, value, variant }: { label: string; value: string; variant: "primary" | "secondary" }) {
+  const styles = variant === "secondary"
+    ? "bg-secondary-muted border-secondary/20 text-secondary"
+    : "bg-primary-muted border-primary/20 text-primary";
 
   return (
-    <div className={`rounded-2xl border p-4 shrink-0 ${styles.bg} ${styles.border}`}>
-      <p className={`mb-1 text-[8px] font-semibold uppercase tracking-[0.24em] ${styles.text}`}>{label}</p>
-      <p className="text-sm font-semibold tracking-tight text-[#0b4867]">{value}</p>
+    <div className={`rounded-lg border p-3 shrink-0 ${styles}`}>
+      <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide">{label}</p>
+      <p className="text-xs font-semibold text-foreground">{value}</p>
     </div>
   );
 }
 
-function StatusHint({
-  tone,
-  message,
-}: {
-  tone: "info" | "success" | "error";
-  message: string;
-}) {
+function StepNode({ label, done, active }: { label: string; done: boolean; active: boolean }) {
+  return (
+    <div className="flex flex-col items-center gap-1.5 px-3">
+      <div className={`size-2.5 rounded-full border-2 transition-all ${
+        done ? "bg-primary border-primary" : active ? "bg-card border-primary ring-2 ring-primary/20" : "bg-card border-border"
+      }`} />
+      <span className={`text-[9px] font-medium uppercase tracking-wide whitespace-nowrap ${
+        done ? "text-primary" : active ? "text-foreground" : "text-muted-foreground"
+      }`}>{label}</span>
+    </div>
+  );
+}
+
+function StatusHint({ tone, message }: { tone: "info" | "success" | "error"; message: string }) {
   const styles =
-    tone === "success"
-      ? "border-[#bdece4] bg-[#eafaf7] text-[#0b786e]"
-      : tone === "error"
-        ? "border-red-200 bg-red-50 text-red-700"
-        : "border-[#d5e2ea] bg-[#f8fbfd] text-slate-500";
+    tone === "success" ? "border-secondary/20 bg-secondary-muted text-secondary" :
+    tone === "error" ? "border-destructive/20 bg-destructive/5 text-destructive" :
+    "border-border bg-muted text-muted-foreground";
 
   return (
-    <div className={`flex items-start gap-3 rounded-[1.25rem] border p-4 text-sm font-semibold ${styles}`}>
-      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+    <div className={`flex items-start gap-3 rounded-lg border p-3 text-xs font-medium ${styles}`}>
+      <AlertCircle className="mt-0.5 size-4 shrink-0" />
       <span>{message}</span>
     </div>
   );
